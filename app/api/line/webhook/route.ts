@@ -526,6 +526,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   const supplementKeywords = ["保健食品", "領取", "新增領取紀錄"];
   const courseKeywords = ["課程"];
   const newBookingKeywords = ["新增預約"];
+  const completeCourseKeywords = ["完成課程"];
   const paymentKeywords = ["繳費", "付款"];
 
   const isMenuCommand = [
@@ -534,6 +535,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
     ...supplementKeywords,
     ...courseKeywords,
     ...newBookingKeywords,
+    ...completeCourseKeywords,
     ...paymentKeywords,
   ].includes(normalizedText);
 
@@ -623,12 +625,78 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
     };
   }
 
+  if (completeCourseKeywords.includes(normalizedText)) {
+    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+    if (!student) {
+      return {
+        ok: false,
+        replyText: "找不到學生資料，無法讀取預約課程。",
+        errors: ["找不到學生資料，無法讀取預約課程"],
+        quickReplies: [],
+      };
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { data: scheduled, error } = await supabase
+      .from("class_sessions")
+      .select("session_date, session_time")
+      .eq("student_id", student.id)
+      .eq("status", "scheduled")
+      .order("session_date", { ascending: true })
+      .order("session_time", { ascending: true })
+      .limit(10);
+
+    if (error) {
+      return {
+        ok: false,
+        replyText: error.message,
+        errors: [error.message],
+        quickReplies: [],
+      };
+    }
+
+    if (!scheduled?.length) {
+      return {
+        ok: true,
+        replyText: "目前沒有可完成的已預約課程。",
+        errors: [],
+        quickReplies: [
+          { label: "課程", text: "課程" },
+          { label: "返回", text: "返回" },
+        ],
+      };
+    }
+
+    return {
+      ok: true,
+      replyText: "請選擇要完成的課程：",
+      errors: [],
+      quickReplies: [
+        ...scheduled.map((session) => {
+          const label = formatSessionChoice(session.session_date, session.session_time);
+          return {
+            label,
+            text: `選擇完成課程 ${label}`,
+          };
+        }),
+        { label: "返回", text: "返回" },
+      ],
+    };
+  }
+
   return {
     ok: true,
     replyText: "繳費操作下一步會接上：登記已繳、改回未繳。",
     errors: [],
     quickReplies: [],
   };
+}
+
+function formatSessionChoice(date: string, time: string | null) {
+  const [, month, day] = date.split("-");
+  const displayTime = time ? time.slice(0, 5) : "未定";
+  return `${Number(month)}/${Number(day)} ${displayTime}`;
 }
 
 function getPublicSiteUrl() {

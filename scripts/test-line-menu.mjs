@@ -106,10 +106,31 @@ if (
   throw new Error("LINE new booking prompt was not returned as expected.");
 }
 
+const completeCourse = await sendMenuCommand("完成課程");
+const completeCourseMessage = completeCourse.body.replies?.[0]?.reply?.payload?.messages?.[0];
+const completeCourseLabels = (completeCourseMessage?.quickReply?.items ?? []).map((item) => item.action?.label);
+
+if (
+  !completeCourse.response.ok ||
+  !completeCourseMessage?.text.includes("請選擇要完成的課程") ||
+  !completeCourseLabels.includes("返回") ||
+  completeCourse.body.replies?.[0]?.pending !== null
+) {
+  console.error(JSON.stringify(completeCourse.body, null, 2));
+  throw new Error("LINE complete course choices were not returned as expected.");
+}
+
 console.log("LINE menu test OK");
 console.log(
   JSON.stringify(
-    { handled: body.handled, replyText, mainMenuLabels, courseLabels, newBookingPrompt: newBookingMessage.text },
+    {
+      handled: body.handled,
+      replyText,
+      mainMenuLabels,
+      courseLabels,
+      newBookingPrompt: newBookingMessage.text,
+      completeCourseLabels,
+    },
     null,
     2,
   ),
