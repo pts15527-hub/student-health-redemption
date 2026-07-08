@@ -405,11 +405,17 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   const linkKeywords = ["學生端連結", "學生連結", "連結"];
   const supplementKeywords = ["保健食品", "領取", "新增領取紀錄"];
   const courseKeywords = ["課程"];
+  const newBookingKeywords = ["新增預約"];
   const paymentKeywords = ["繳費", "付款"];
 
-  const isMenuCommand = [...menuKeywords, ...linkKeywords, ...supplementKeywords, ...courseKeywords, ...paymentKeywords].includes(
-    normalizedText,
-  );
+  const isMenuCommand = [
+    ...menuKeywords,
+    ...linkKeywords,
+    ...supplementKeywords,
+    ...courseKeywords,
+    ...newBookingKeywords,
+    ...paymentKeywords,
+  ].includes(normalizedText);
 
   if (!isMenuCommand) return null;
 
@@ -480,6 +486,15 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
         { label: "取消課程", text: "取消課程" },
         { label: "返回", text: "返回" },
       ],
+    };
+  }
+
+  if (newBookingKeywords.includes(normalizedText)) {
+    return {
+      ok: true,
+      replyText: ["請輸入預約日期與時間：", "", "範例：7/15 18:30"].join("\n"),
+      errors: [],
+      quickReplies: [{ label: "返回", text: "返回" }],
     };
   }
 

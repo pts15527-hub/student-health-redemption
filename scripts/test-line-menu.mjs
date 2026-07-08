@@ -81,5 +81,20 @@ if (
   throw new Error("LINE course menu buttons were not returned as expected.");
 }
 
+const newBooking = await sendMenuCommand("新增預約");
+const newBookingMessage = newBooking.body.replies?.[0]?.reply?.payload?.messages?.[0];
+const newBookingLabels = (newBookingMessage?.quickReply?.items ?? []).map((item) => item.action?.label);
+
+if (
+  !newBooking.response.ok ||
+  !newBookingMessage?.text.includes("請輸入預約日期與時間") ||
+  !newBookingMessage.text.includes("7/15 18:30") ||
+  !newBookingLabels.includes("返回") ||
+  newBooking.body.replies?.[0]?.pending !== null
+) {
+  console.error(JSON.stringify(newBooking.body, null, 2));
+  throw new Error("LINE new booking prompt was not returned as expected.");
+}
+
 console.log("LINE menu test OK");
-console.log(JSON.stringify({ handled: body.handled, replyText, courseLabels }, null, 2));
+console.log(JSON.stringify({ handled: body.handled, replyText, courseLabels, newBookingPrompt: newBookingMessage.text }, null, 2));
