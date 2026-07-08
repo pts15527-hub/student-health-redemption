@@ -70,7 +70,11 @@ export default async function StudentHomePage({ params }: { params: Promise<{ sh
         <div className="stat-grid">
           <StatCard label="總堂數" value={bundle.stats.totalSessions} />
           <StatCard label="已上課" value={bundle.stats.completedSessions} accent />
-          <StatCard label="已預約" value={bundle.stats.scheduledSessions} />
+          <StatCard
+            label="已預約"
+            value={bundle.stats.scheduledSessions}
+            href={`/s/${share_token}/sessions#scheduled`}
+          />
           <StatCard label="可預約" value={bundle.stats.remainingBookableSessions} />
         </div>
       </section>

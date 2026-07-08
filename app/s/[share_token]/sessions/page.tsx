@@ -55,7 +55,7 @@ export default async function SessionsPage({ params }: { params: Promise<{ share
         ))}
       </section>
 
-      <section className="panel">
+      <section className="panel anchor-section" id="scheduled">
         <div className="section-heading">
           <h2>即將上課</h2>
           <span className="badge">{scheduled.length} 堂</span>
