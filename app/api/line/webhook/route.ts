@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getStudentByShareToken } from "@/lib/data";
 import { verifyLineAdminUserId } from "@/lib/line/admin-auth";
+import { parseBookingInput } from "@/lib/line/course-booking";
 import { extractLineTextCommands, isLineWebhookBody } from "@/lib/line/events";
 import {
   cancelPendingRedemption,
@@ -77,6 +78,24 @@ async function handleLineWebhookBody(payload: unknown) {
   const replies = [];
 
   for (const command of commands) {
+    const bookingResult = await handleBookingInput(command.messageText, command.adminUserId);
+
+    if (bookingResult) {
+      const replyResult = await replyLineText(command.replyToken, bookingResult.replyText, {
+        quickReplies: bookingResult.quickReplies,
+      });
+
+      replies.push({
+        ok: bookingResult.ok,
+        replyToken: command.replyToken,
+        reply: replyResult,
+        pending: null,
+        errors: bookingResult.ok ? [] : bookingResult.errors,
+      });
+
+      continue;
+    }
+
     const pendingActionResult = await handlePendingAction(command.messageText, command.adminUserId);
 
     if (pendingActionResult) {
@@ -148,6 +167,107 @@ async function handleLineWebhookBody(payload: unknown) {
     handled: replies.length,
     replies,
   });
+}
+
+async function handleBookingInput(messageText: string, adminUserId: string) {
+  const normalizedText = messageText.trim();
+
+  if (!/^\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2}$/.test(normalizedText)) return null;
+
+  const adminError = verifyLineAdminUserId(adminUserId);
+
+  if (adminError) {
+    const body = await adminError.json();
+    const errors = Array.isArray(body.errors) ? body.errors : ["操作者驗證失敗"];
+    return { ok: false, replyText: errors.join("\n"), errors, quickReplies: [] };
+  }
+
+  const parsed = parseBookingInput(normalizedText);
+
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      replyText: parsed.error,
+      errors: [parsed.error],
+      quickReplies: [{ label: "返回", text: "返回" }],
+    };
+  }
+
+  const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+  if (!student) {
+    const errors = ["找不到學生資料，無法新增預約"];
+    return { ok: false, replyText: errors[0], errors, quickReplies: [] };
+  }
+
+  const supabase = createSupabaseServerClient();
+  const { data: existing, error: existingError } = await supabase
+    .from("class_sessions")
+    .select("id")
+    .eq("student_id", student.id)
+    .eq("session_date", parsed.data.sessionDate)
+    .eq("session_time", parsed.data.sessionTime)
+    .eq("status", "scheduled")
+    .maybeSingle();
+
+  if (existingError) {
+    return {
+      ok: false,
+      replyText: existingError.message,
+      errors: [existingError.message],
+      quickReplies: [],
+    };
+  }
+
+  if (existing) {
+    const errors = ["這個日期與時間已有預約，沒有重複新增。"];
+    return {
+      ok: false,
+      replyText: errors[0],
+      errors,
+      quickReplies: [
+        { label: "課程", text: "課程" },
+        { label: "返回", text: "返回" },
+      ],
+    };
+  }
+
+  const { error } = await supabase.from("class_sessions").insert({
+    student_id: student.id,
+    session_date: parsed.data.sessionDate,
+    session_time: parsed.data.sessionTime,
+    title: "預約課程",
+    status: "scheduled",
+    content: null,
+    notes: "由 LINE Bot 新增",
+    counts_toward_used_sessions: false,
+  });
+
+  if (error) {
+    return {
+      ok: false,
+      replyText: error.message,
+      errors: [error.message],
+      quickReplies: [],
+    };
+  }
+
+  return {
+    ok: true,
+    replyText: [
+      "預約已新增",
+      "",
+      `日期：${parsed.data.displayDate}`,
+      `時間：${parsed.data.displayTime}`,
+      "",
+      "學生端已同步更新。",
+    ].join("\n"),
+    errors: [],
+    quickReplies: [
+      { label: "課程", text: "課程" },
+      { label: "返回", text: "返回" },
+    ],
+  };
 }
 
 async function handlePendingAction(messageText: string, adminUserId: string) {

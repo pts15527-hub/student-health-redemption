@@ -12,6 +12,7 @@
     "test:line-webhook": "node scripts/test-line-webhook.mjs",
     "test:line-signature": "node scripts/test-line-signature.mjs",
     "test:line-menu": "node scripts/test-line-menu.mjs",
+    "test:course-booking-parser": "node scripts/test-course-booking-parser.mjs",
     "test:line-event": "node scripts/test-line-event.mjs",
     "test:line-admin-auth": "node scripts/test-line-admin-auth.mjs",
     "test:line-confirm": "node scripts/test-line-confirm.mjs",
