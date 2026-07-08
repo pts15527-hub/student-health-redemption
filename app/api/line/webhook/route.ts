@@ -52,6 +52,15 @@ async function handleLineWebhookBody(payload: unknown) {
 
   const commands = extractLineTextCommands(payload);
 
+  if (process.env.LINE_DEBUG_LOG_USER_IDS === "true") {
+    for (const command of commands) {
+      console.info("[line-webhook] received userId", {
+        userId: command.adminUserId,
+        textPreview: command.messageText.slice(0, 20),
+      });
+    }
+  }
+
   if (commands.length === 0) {
     return NextResponse.json({
       ok: true,
