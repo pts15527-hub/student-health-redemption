@@ -11,11 +11,12 @@
     "test:parser": "node scripts/test-redemption-parser.mjs",
     "test:line-webhook": "node scripts/test-line-webhook.mjs",
     "test:line-signature": "node scripts/test-line-signature.mjs",
+    "test:line-menu": "node scripts/test-line-menu.mjs",
     "test:line-event": "node scripts/test-line-event.mjs",
     "test:line-admin-auth": "node scripts/test-line-admin-auth.mjs",
     "test:line-confirm": "node scripts/test-line-confirm.mjs",
     "test:line-cancel": "node scripts/test-line-cancel.mjs",
-    "test:line-flow": "npm run test:line-webhook && npm run test:line-signature && npm run test:line-event && npm run test:line-admin-auth && npm run test:line-confirm && npm run test:line-cancel",
+    "test:line-flow": "npm run test:line-webhook && npm run test:line-signature && npm run test:line-menu && npm run test:line-event && npm run test:line-admin-auth && npm run test:line-confirm && npm run test:line-cancel",
     "cleanup:test-pending": "node scripts/cleanup-test-pending-redemptions.mjs",
     "cleanup:test-redemptions": "node scripts/cleanup-test-redemptions.mjs"
   },

@@ -72,6 +72,22 @@ async function handleLineWebhookBody(payload: unknown) {
   const replies = [];
 
   for (const command of commands) {
+    const menuResult = await buildLineMenuResponse(command.messageText, command.adminUserId);
+
+    if (menuResult) {
+      const replyResult = await replyLineText(command.replyToken, menuResult.replyText);
+
+      replies.push({
+        ok: menuResult.ok,
+        replyToken: command.replyToken,
+        reply: replyResult,
+        pending: null,
+        errors: menuResult.ok ? [] : menuResult.errors,
+      });
+
+      continue;
+    }
+
     const result = await buildParsedRedemptionResponse({
       shareToken: yiNingPackagePlan.shareToken,
       messageText: command.messageText,
@@ -268,4 +284,89 @@ function toWebhookParsedPayload(data: Extract<ReturnType<typeof parseRedemptionM
       })),
     })),
   };
+}
+
+async function buildLineMenuResponse(messageText: string, adminUserId: string) {
+  const normalizedText = messageText.trim();
+  const menuKeywords = ["裔甯", "邱裔甯", "選單", "返回"];
+  const linkKeywords = ["學生端連結", "學生連結", "連結"];
+  const supplementKeywords = ["保健食品", "領取", "新增領取紀錄"];
+  const courseKeywords = ["課程"];
+  const paymentKeywords = ["繳費", "付款"];
+
+  const isMenuCommand = [...menuKeywords, ...linkKeywords, ...supplementKeywords, ...courseKeywords, ...paymentKeywords].includes(
+    normalizedText,
+  );
+
+  if (!isMenuCommand) return null;
+
+  const adminError = verifyLineAdminUserId(adminUserId);
+
+  if (adminError) {
+    const body = await adminError.json();
+    return {
+      ok: false,
+      replyText: Array.isArray(body.errors) ? body.errors.join("\n") : "操作者驗證失敗",
+      errors: Array.isArray(body.errors) ? body.errors : ["操作者驗證失敗"],
+    };
+  }
+
+  if (menuKeywords.includes(normalizedText)) {
+    return {
+      ok: true,
+      replyText: [
+        "裔甯管理選單",
+        "",
+        "請輸入其中一項：",
+        "課程",
+        "繳費",
+        "保健食品",
+        "學生端連結",
+      ].join("\n"),
+      errors: [],
+    };
+  }
+
+  if (linkKeywords.includes(normalizedText)) {
+    return {
+      ok: true,
+      replyText: `${getPublicSiteUrl()}/s/${yiNingPackagePlan.shareToken}`,
+      errors: [],
+    };
+  }
+
+  if (supplementKeywords.includes(normalizedText)) {
+    return {
+      ok: true,
+      replyText: [
+        "新增保健食品領取紀錄，請直接輸入：",
+        "",
+        "7/1",
+        "B群 1組",
+        "D 1組",
+        "白賦美 1組",
+        "",
+        "同一筆可以包含一般品項與任搭。",
+      ].join("\n"),
+      errors: [],
+    };
+  }
+
+  if (courseKeywords.includes(normalizedText)) {
+    return {
+      ok: true,
+      replyText: "課程操作下一步會接上：新增預約、完成課程、取消課程。",
+      errors: [],
+    };
+  }
+
+  return {
+    ok: true,
+    replyText: "繳費操作下一步會接上：登記已繳、改回未繳。",
+    errors: [],
+  };
+}
+
+function getPublicSiteUrl() {
+  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://student-health-redemption.vercel.app").replace(/\/$/, "");
 }
