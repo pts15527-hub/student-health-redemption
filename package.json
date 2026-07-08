@@ -1,0 +1,36 @@
+{
+  "name": "yining-project-record",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "validate:data": "node scripts/validate-local-data.mjs",
+    "test:parser": "node scripts/test-redemption-parser.mjs",
+    "test:line-webhook": "node scripts/test-line-webhook.mjs",
+    "test:line-signature": "node scripts/test-line-signature.mjs",
+    "test:line-event": "node scripts/test-line-event.mjs",
+    "test:line-admin-auth": "node scripts/test-line-admin-auth.mjs",
+    "test:line-confirm": "node scripts/test-line-confirm.mjs",
+    "test:line-cancel": "node scripts/test-line-cancel.mjs",
+    "test:line-flow": "npm run test:line-webhook && npm run test:line-signature && npm run test:line-event && npm run test:line-admin-auth && npm run test:line-confirm && npm run test:line-cancel",
+    "cleanup:test-pending": "node scripts/cleanup-test-pending-redemptions.mjs",
+    "cleanup:test-redemptions": "node scripts/cleanup-test-redemptions.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.50.5",
+    "lucide-react": "^0.468.0",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.7.2"
+  }
+}
