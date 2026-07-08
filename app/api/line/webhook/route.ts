@@ -96,7 +96,9 @@ async function handleLineWebhookBody(payload: unknown) {
     const menuResult = await buildLineMenuResponse(command.messageText, command.adminUserId);
 
     if (menuResult) {
-      const replyResult = await replyLineText(command.replyToken, menuResult.replyText);
+      const replyResult = await replyLineText(command.replyToken, menuResult.replyText, {
+        quickReplies: menuResult.quickReplies,
+      });
 
       replies.push({
         ok: menuResult.ok,
@@ -419,6 +421,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
       ok: false,
       replyText: Array.isArray(body.errors) ? body.errors.join("\n") : "操作者驗證失敗",
       errors: Array.isArray(body.errors) ? body.errors : ["操作者驗證失敗"],
+      quickReplies: [],
     };
   }
 
@@ -435,6 +438,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
         "學生端連結",
       ].join("\n"),
       errors: [],
+      quickReplies: [],
     };
   }
 
@@ -443,6 +447,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
       ok: true,
       replyText: `${getPublicSiteUrl()}/s/${yiNingPackagePlan.shareToken}`,
       errors: [],
+      quickReplies: [],
     };
   }
 
@@ -460,14 +465,21 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
         "同一筆可以包含一般品項與任搭。",
       ].join("\n"),
       errors: [],
+      quickReplies: [],
     };
   }
 
   if (courseKeywords.includes(normalizedText)) {
     return {
       ok: true,
-      replyText: "課程操作下一步會接上：新增預約、完成課程、取消課程。",
+      replyText: "裔甯課程管理\n\n請選擇操作：",
       errors: [],
+      quickReplies: [
+        { label: "新增預約", text: "新增預約" },
+        { label: "完成課程", text: "完成課程" },
+        { label: "取消課程", text: "取消課程" },
+        { label: "返回", text: "返回" },
+      ],
     };
   }
 
@@ -475,6 +487,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
     ok: true,
     replyText: "繳費操作下一步會接上：登記已繳、改回未繳。",
     errors: [],
+    quickReplies: [],
   };
 }
 

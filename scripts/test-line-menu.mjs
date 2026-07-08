@@ -17,34 +17,39 @@ function sign(body) {
   return crypto.createHmac("sha256", channelSecret).update(body, "utf8").digest("base64");
 }
 
-const rawBody = JSON.stringify({
-  events: [
-    {
-      type: "message",
-      replyToken: "test-reply-token",
-      source: {
-        type: "user",
-        userId: "local-test-admin",
+async function sendMenuCommand(text) {
+  const rawBody = JSON.stringify({
+    events: [
+      {
+        type: "message",
+        replyToken: `test-${text}`,
+        source: {
+          type: "user",
+          userId: "local-test-admin",
+        },
+        message: {
+          type: "text",
+          id: `test-${text}`,
+          text,
+        },
       },
-      message: {
-        type: "text",
-        id: "test-message-id",
-        text: "裔甯",
-      },
+    ],
+  });
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-line-signature": sign(rawBody),
     },
-  ],
-});
+    body: rawBody,
+  });
 
-const response = await fetch(endpoint, {
-  method: "POST",
-  headers: {
-    "content-type": "application/json",
-    "x-line-signature": sign(rawBody),
-  },
-  body: rawBody,
-});
+  return { response, body: await response.json() };
+}
 
-const body = await response.json();
+const mainMenu = await sendMenuCommand("裔甯");
+const { response, body } = mainMenu;
 const replyText = body.replies?.[0]?.reply?.payload?.messages?.[0]?.text;
 
 if (!response.ok || body.ok !== true || body.handled !== 1) {
@@ -62,5 +67,19 @@ if (body.replies?.[0]?.pending !== null) {
   throw new Error("LINE menu command should not create pending redemption.");
 }
 
+const courseMenu = await sendMenuCommand("課程");
+const courseMessage = courseMenu.body.replies?.[0]?.reply?.payload?.messages?.[0];
+const courseLabels = (courseMessage?.quickReply?.items ?? []).map((item) => item.action?.label);
+const expectedCourseLabels = ["新增預約", "完成課程", "取消課程", "返回"];
+
+if (
+  !courseMenu.response.ok ||
+  !courseMessage?.text.includes("裔甯課程管理") ||
+  !expectedCourseLabels.every((label) => courseLabels.includes(label))
+) {
+  console.error(JSON.stringify(courseMenu.body, null, 2));
+  throw new Error("LINE course menu buttons were not returned as expected.");
+}
+
 console.log("LINE menu test OK");
-console.log(JSON.stringify({ handled: body.handled, replyText }, null, 2));
+console.log(JSON.stringify({ handled: body.handled, replyText, courseLabels }, null, 2));
