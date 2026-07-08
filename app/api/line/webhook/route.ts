@@ -564,7 +564,12 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
         "學生端連結",
       ].join("\n"),
       errors: [],
-      quickReplies: [],
+      quickReplies: [
+        { label: "課程", text: "課程" },
+        { label: "繳費", text: "繳費" },
+        { label: "保健食品", text: "保健食品" },
+        { label: "學生端連結", text: "學生端連結" },
+      ],
     };
   }
 

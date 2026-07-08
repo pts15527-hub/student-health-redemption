@@ -62,6 +62,16 @@ if (!replyText?.includes("裔甯管理選單") || !replyText.includes("學生端
   throw new Error("LINE menu reply text was not returned as expected.");
 }
 
+const mainMenuLabels = (
+  body.replies?.[0]?.reply?.payload?.messages?.[0]?.quickReply?.items ?? []
+).map((item) => item.action?.label);
+const expectedMainMenuLabels = ["課程", "繳費", "保健食品", "學生端連結"];
+
+if (!expectedMainMenuLabels.every((label) => mainMenuLabels.includes(label))) {
+  console.error(JSON.stringify(body, null, 2));
+  throw new Error("LINE main menu buttons were not returned as expected.");
+}
+
 if (body.replies?.[0]?.pending !== null) {
   console.error(JSON.stringify(body, null, 2));
   throw new Error("LINE menu command should not create pending redemption.");
@@ -97,4 +107,10 @@ if (
 }
 
 console.log("LINE menu test OK");
-console.log(JSON.stringify({ handled: body.handled, replyText, courseLabels, newBookingPrompt: newBookingMessage.text }, null, 2));
+console.log(
+  JSON.stringify(
+    { handled: body.handled, replyText, mainMenuLabels, courseLabels, newBookingPrompt: newBookingMessage.text },
+    null,
+    2,
+  ),
+);
