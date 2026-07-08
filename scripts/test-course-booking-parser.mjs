@@ -15,4 +15,15 @@ assert.equal(parseBookingInput("2/30 18:30", 2026).ok, false);
 assert.equal(parseBookingInput("7/15 25:00", 2026).ok, false);
 assert.equal(parseBookingInput("7月15日 18:30", 2026).ok, false);
 
+const fullWidth = parseBookingInput("７／１５　１８：３０", 2026);
+assert.equal(fullWidth.ok, true);
+
+if (fullWidth.ok) {
+  assert.equal(fullWidth.data.sessionDate, "2026-07-15");
+  assert.equal(fullWidth.data.sessionTime, "18:30:00");
+}
+
+const mixedWidth = parseBookingInput("7／15 18：30", 2026);
+assert.equal(mixedWidth.ok, true);
+
 console.log("Course booking parser OK");

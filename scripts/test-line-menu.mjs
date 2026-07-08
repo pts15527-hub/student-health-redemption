@@ -88,7 +88,7 @@ const newBookingLabels = (newBookingMessage?.quickReply?.items ?? []).map((item)
 if (
   !newBooking.response.ok ||
   !newBookingMessage?.text.includes("請輸入預約日期與時間") ||
-  !newBookingMessage.text.includes("7/15 18:30") ||
+  !newBookingMessage.text.includes("７／１５　１８：３０") ||
   !newBookingLabels.includes("返回") ||
   newBooking.body.replies?.[0]?.pending !== null
 ) {

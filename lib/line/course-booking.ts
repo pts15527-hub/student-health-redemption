@@ -8,7 +8,8 @@ export type ParsedBookingInput = {
 export function parseBookingInput(input: string, year = getTaipeiYear()):
   | { ok: true; data: ParsedBookingInput }
   | { ok: false; error: string } {
-  const match = input.trim().match(/^(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})$/);
+  const normalizedInput = normalizeBookingInput(input);
+  const match = normalizedInput.match(/^(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})$/);
 
   if (!match) {
     return {
@@ -52,6 +53,10 @@ export function parseBookingInput(input: string, year = getTaipeiYear()):
       displayTime: `${paddedHour}:${paddedMinute}`,
     },
   };
+}
+
+export function normalizeBookingInput(input: string) {
+  return input.normalize("NFKC").trim().replace(/\s+/g, " ");
 }
 
 function getTaipeiYear() {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getStudentByShareToken } from "@/lib/data";
 import { verifyLineAdminUserId } from "@/lib/line/admin-auth";
-import { parseBookingInput } from "@/lib/line/course-booking";
+import { normalizeBookingInput, parseBookingInput } from "@/lib/line/course-booking";
 import { extractLineTextCommands, isLineWebhookBody } from "@/lib/line/events";
 import {
   cancelPendingRedemption,
@@ -170,7 +170,7 @@ async function handleLineWebhookBody(payload: unknown) {
 }
 
 async function handleBookingInput(messageText: string, adminUserId: string) {
-  const normalizedText = messageText.trim();
+  const normalizedText = normalizeBookingInput(messageText);
 
   if (!/^\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2}$/.test(normalizedText)) return null;
 
@@ -612,7 +612,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   if (newBookingKeywords.includes(normalizedText)) {
     return {
       ok: true,
-      replyText: ["請輸入預約日期與時間：", "", "範例：7/15 18:30"].join("\n"),
+      replyText: ["請輸入預約日期與時間：", "", "範例：７／１５　１８：３０", "", "全形、半形皆可。"].join("\n"),
       errors: [],
       quickReplies: [{ label: "返回", text: "返回" }],
     };
