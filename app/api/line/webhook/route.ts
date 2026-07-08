@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { getStudentByShareToken } from "@/lib/data";
 import { verifyLineAdminUserId } from "@/lib/line/admin-auth";
 import { extractLineTextCommands, isLineWebhookBody } from "@/lib/line/events";
+import {
+  cancelPendingRedemption,
+  confirmPendingRedemption,
+  findLatestPendingRedemption,
+} from "@/lib/line/pending-redemptions";
 import { parseRedemptionMessage } from "@/lib/line/redemption-parser";
 import { replyLineText } from "@/lib/line/reply";
 import { verifyLineSignatureGuard } from "@/lib/line/signature";
@@ -72,6 +77,22 @@ async function handleLineWebhookBody(payload: unknown) {
   const replies = [];
 
   for (const command of commands) {
+    const pendingActionResult = await handlePendingAction(command.messageText, command.adminUserId);
+
+    if (pendingActionResult) {
+      const replyResult = await replyLineText(command.replyToken, pendingActionResult.replyText);
+
+      replies.push({
+        ok: pendingActionResult.ok,
+        replyToken: command.replyToken,
+        reply: replyResult,
+        pending: null,
+        errors: pendingActionResult.ok ? [] : pendingActionResult.errors,
+      });
+
+      continue;
+    }
+
     const menuResult = await buildLineMenuResponse(command.messageText, command.adminUserId);
 
     if (menuResult) {
@@ -114,6 +135,85 @@ async function handleLineWebhookBody(payload: unknown) {
     handled: replies.length,
     replies,
   });
+}
+
+async function handlePendingAction(messageText: string, adminUserId: string) {
+  const normalizedText = messageText.trim();
+  const isConfirm = ["確認送出", "確認"].includes(normalizedText);
+  const isCancel = ["取消"].includes(normalizedText);
+
+  if (!isConfirm && !isCancel) return null;
+
+  const adminError = verifyLineAdminUserId(adminUserId);
+
+  if (adminError) {
+    const body = await adminError.json();
+    const errors = Array.isArray(body.errors) ? body.errors : ["操作者驗證失敗"];
+    return { ok: false, replyText: errors.join("\n"), errors };
+  }
+
+  const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+  if (!student) {
+    const errors = ["找不到學生資料"];
+    return { ok: false, replyText: errors[0], errors };
+  }
+
+  const latestResult = await findLatestPendingRedemption(student.id);
+
+  if (!latestResult.ok) {
+    return {
+      ok: false,
+      replyText: latestResult.errors.join("\n"),
+      errors: latestResult.errors,
+    };
+  }
+
+  if (!latestResult.pending) {
+    const errors = ["目前沒有等待確認的領取紀錄。請先輸入日期與商品。"];
+    return { ok: false, replyText: errors[0], errors };
+  }
+
+  const actionResult = isConfirm
+    ? await confirmPendingRedemption(latestResult.pending.id)
+    : await cancelPendingRedemption(latestResult.pending.id);
+
+  if (!actionResult.ok) {
+    return {
+      ok: false,
+      replyText: actionResult.errors.join("\n"),
+      errors: actionResult.errors,
+    };
+  }
+
+  if (actionResult.status === "cancelled") {
+    return {
+      ok: true,
+      replyText: "已取消這筆領取紀錄，沒有扣除組數。\n\n輸入「保健食品」可重新新增，輸入「返回」回到裔甯選單。",
+      errors: [],
+    };
+  }
+
+  return {
+    ok: true,
+    replyText: [
+      "領取紀錄已送出",
+      "",
+      `日期：${formatDisplayDate(actionResult.date)}`,
+      `扣除：${actionResult.creditUsed} 組`,
+      `商品總數：${actionResult.totalBoxes} 盒`,
+      "",
+      "學生端已同步更新。",
+      "輸入「返回」回到裔甯選單。",
+    ].join("\n"),
+    errors: [],
+  };
+}
+
+function formatDisplayDate(date?: string) {
+  if (!date) return "";
+  const [, month, day] = date.split("-");
+  return `${Number(month)}/${Number(day)}`;
 }
 
 async function handleLocalWebhookPayload(payload: LocalWebhookPayload) {
