@@ -119,7 +119,18 @@ async function handleLineWebhookBody(payload: unknown) {
     });
 
     const replyText = result.ok ? result.replyText : result.errors.join("\n");
-    const replyResult = await replyLineText(command.replyToken, replyText);
+    const replyResult = await replyLineText(
+      command.replyToken,
+      replyText,
+      result.ok && result.pending
+        ? {
+            quickReplies: [
+              { label: "確認送出", text: "確認送出" },
+              { label: "取消", text: "取消" },
+            ],
+          }
+        : undefined,
+    );
 
     replies.push({
       ok: result.ok,

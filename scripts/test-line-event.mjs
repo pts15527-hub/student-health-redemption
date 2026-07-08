@@ -85,6 +85,14 @@ try {
     throw new Error("LINE event did not create a test pending redemption.");
   }
 
+  const quickReplyItems = reply.reply.payload.messages[0]?.quickReply?.items ?? [];
+  const quickReplyLabels = quickReplyItems.map((item) => item.action?.label);
+
+  if (!quickReplyLabels.includes("確認送出") || !quickReplyLabels.includes("取消")) {
+    console.error(JSON.stringify(body, null, 2));
+    throw new Error("LINE event reply did not include confirmation and cancellation buttons.");
+  }
+
   const { data: pending, error } = await supabase
     .from("pending_redemptions")
     .select("id, source, is_test")

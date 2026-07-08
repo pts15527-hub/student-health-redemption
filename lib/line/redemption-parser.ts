@@ -328,7 +328,7 @@ function buildConfirmationText(
     lines.push(`小計：${group.boxes} 盒｜扣 ${group.creditUsed} 組`);
   }
 
-  lines.push("", `本次扣除：${creditUsed} 組`, `本次盒數：${totalBoxes} 盒`, "", "[確認送出] [取消]");
+  lines.push("", `本次扣除：${creditUsed} 組`, `本次盒數：${totalBoxes} 盒`, "", "請選擇操作：");
 
   return lines.join("\n");
 }

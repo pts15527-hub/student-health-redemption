@@ -1,6 +1,16 @@
 type LineTextMessage = {
   type: "text";
   text: string;
+  quickReply?: {
+    items: Array<{
+      type: "action";
+      action: {
+        type: "message";
+        label: string;
+        text: string;
+      };
+    }>;
+  };
 };
 
 type ReplyPayload = {
@@ -8,17 +18,37 @@ type ReplyPayload = {
   messages: LineTextMessage[];
 };
 
+type ReplyOptions = {
+  quickReplies?: Array<{
+    label: string;
+    text: string;
+  }>;
+};
+
 const LINE_REPLY_ENDPOINT = "https://api.line.me/v2/bot/message/reply";
 
-export async function replyLineText(replyToken: string, text: string) {
+export async function replyLineText(replyToken: string, text: string, options: ReplyOptions = {}) {
+  const message: LineTextMessage = {
+    type: "text",
+    text,
+  };
+
+  if (options.quickReplies?.length) {
+    message.quickReply = {
+      items: options.quickReplies.map((quickReply) => ({
+        type: "action",
+        action: {
+          type: "message",
+          label: quickReply.label,
+          text: quickReply.text,
+        },
+      })),
+    };
+  }
+
   const payload: ReplyPayload = {
     replyToken,
-    messages: [
-      {
-        type: "text",
-        text,
-      },
-    ],
+    messages: [message],
   };
 
   if (shouldDryRunLineReply()) {
