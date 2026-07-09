@@ -21,7 +21,8 @@
     "test:line-confirm": "node scripts/test-line-confirm.mjs",
     "test:line-cancel": "node scripts/test-line-cancel.mjs",
     "test:line-pending-actions": "node scripts/test-line-pending-actions.mjs",
-    "test:line-flow": "npm run test:line-webhook && npm run test:line-signature && npm run test:line-menu && npm run test:line-event && npm run test:line-admin-auth && npm run test:line-confirm && npm run test:line-cancel && npm run test:line-pending-actions",
+    "test:line-flow": "npm run test:parser && npm run test:course-booking-parser && npm run test:line-webhook && npm run test:line-signature && npm run test:line-menu && npm run test:line-event && npm run test:line-admin-auth && npm run test:line-confirm && npm run test:line-cancel && npm run test:line-pending-actions && npm run test:line-course-completion && npm run test:line-course-cancellation && npm run test:line-payment-management",
+    "test:release": "npm run validate:data && npm run typecheck && npm run test:line-flow && npm run build",
     "cleanup:test-pending": "node scripts/cleanup-test-pending-redemptions.mjs",
     "cleanup:test-redemptions": "node scripts/cleanup-test-redemptions.mjs"
   },
