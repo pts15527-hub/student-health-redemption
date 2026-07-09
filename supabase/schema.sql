@@ -11,6 +11,21 @@ create table if not exists students (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists student_aliases (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references students(id) on delete cascade,
+  alias_key text not null unique,
+  alias_display text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists line_admin_contexts (
+  admin_user_id text primary key,
+  active_student_id uuid not null references students(id) on delete cascade,
+  selected_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists course_contracts (
   id uuid primary key default gen_random_uuid(),
   student_id uuid not null references students(id) on delete cascade,
@@ -223,12 +238,17 @@ create table if not exists pending_redemptions (
 );
 
 create index if not exists idx_students_share_token on students(share_token);
+create index if not exists idx_student_aliases_student on student_aliases(student_id);
+create index if not exists idx_line_admin_contexts_student on line_admin_contexts(active_student_id);
 create index if not exists idx_class_sessions_student_date on class_sessions(student_id, session_date);
 create index if not exists idx_payment_records_student_due on payment_records(student_id, due_date);
 create index if not exists idx_redemption_records_student_date on redemption_records(student_id, record_date);
 create index if not exists idx_products_category on products(category);
 create index if not exists idx_pending_redemptions_student_status on pending_redemptions(student_id, status, expires_at);
 create index if not exists idx_pending_redemptions_test on pending_redemptions(is_test, created_at);
+
+alter table student_aliases enable row level security;
+alter table line_admin_contexts enable row level security;
 
 -- Minimal test seed.
 insert into students (share_token, name, project_name, risk_notes)
@@ -239,6 +259,22 @@ values (
   array['若有頭暈、心悸、體力不支、瘦瘦針反應或貧血相關狀況，需於訓練前主動告知。']
 )
 on conflict (share_token) do nothing;
+
+insert into student_aliases (student_id, alias_key, alias_display)
+select id, '裔甯', '裔甯'
+from students
+where share_token = 'yi-ning'
+on conflict (alias_key) do update set
+  student_id = excluded.student_id,
+  alias_display = excluded.alias_display;
+
+insert into student_aliases (student_id, alias_key, alias_display)
+select id, '邱裔甯', '邱裔甯'
+from students
+where share_token = 'yi-ning'
+on conflict (alias_key) do update set
+  student_id = excluded.student_id,
+  alias_display = excluded.alias_display;
 
 insert into course_contracts (student_id, plan_name, total_sessions, start_date, duration_months, buffer_months, service_items, cancellation_policy)
 select id, '產後修復運動矯正與營養監測計畫', 72, '2026-06-20', 15, 3,
