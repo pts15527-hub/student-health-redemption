@@ -527,21 +527,30 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   const confirmedCompletionMatch = normalizedText.match(
     /^確認完成課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})\s+(訓練|矯正)$/,
   );
+  const confirmedCancellationMatch = normalizedText.match(
+    /^確認取消課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})$/,
+  );
   const menuKeywords = ["裔甯", "邱裔甯", "選單", "返回"];
   const linkKeywords = ["學生端連結", "學生連結", "連結"];
   const supplementKeywords = ["保健食品", "領取", "新增領取紀錄"];
   const courseKeywords = ["課程"];
   const newBookingKeywords = ["新增預約"];
   const completeCourseKeywords = ["完成課程"];
+  const cancelCourseKeywords = ["取消課程"];
   const paymentKeywords = ["繳費", "付款"];
 
-  const isMenuCommand = Boolean(selectedCompletionMatch) || Boolean(confirmedCompletionMatch) || [
+  const isMenuCommand =
+    Boolean(selectedCompletionMatch) ||
+    Boolean(confirmedCompletionMatch) ||
+    Boolean(confirmedCancellationMatch) ||
+    [
     ...menuKeywords,
     ...linkKeywords,
     ...supplementKeywords,
     ...courseKeywords,
     ...newBookingKeywords,
     ...completeCourseKeywords,
+    ...cancelCourseKeywords,
     ...paymentKeywords,
   ].includes(normalizedText);
 
@@ -684,6 +693,47 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
           return {
             label,
             text: `選擇完成課程 ${label}`,
+          };
+        }),
+        { label: "返回", text: "返回" },
+      ],
+    };
+  }
+
+  if (cancelCourseKeywords.includes(normalizedText)) {
+    const scheduledResult = await getScheduledSessionChoices();
+
+    if (!scheduledResult.ok) {
+      return {
+        ok: false,
+        replyText: scheduledResult.errors.join("\n"),
+        errors: scheduledResult.errors,
+        quickReplies: [],
+      };
+    }
+
+    if (!scheduledResult.sessions.length) {
+      return {
+        ok: true,
+        replyText: "目前沒有可取消的已預約課程。",
+        errors: [],
+        quickReplies: [
+          { label: "課程", text: "課程" },
+          { label: "返回", text: "返回" },
+        ],
+      };
+    }
+
+    return {
+      ok: true,
+      replyText: "請選擇要取消的課程：\n\n點選時段後會直接取消，不扣堂數。",
+      errors: [],
+      quickReplies: [
+        ...scheduledResult.sessions.map((session) => {
+          const label = formatSessionChoice(session.session_date, session.session_time);
+          return {
+            label,
+            text: `確認取消課程 ${label}`,
           };
         }),
         { label: "返回", text: "返回" },
@@ -838,11 +888,120 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
     };
   }
 
+  if (confirmedCancellationMatch) {
+    const parsed = parseBookingInput(confirmedCancellationMatch[1]);
+
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        replyText: parsed.error,
+        errors: [parsed.error],
+        quickReplies: [{ label: "返回", text: "返回" }],
+      };
+    }
+
+    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+    if (!student) {
+      return {
+        ok: false,
+        replyText: "找不到學生資料，無法取消課程。",
+        errors: ["找不到學生資料，無法取消課程"],
+        quickReplies: [],
+      };
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { data: cancelledSession, error } = await supabase
+      .from("class_sessions")
+      .update({
+        status: "cancelled",
+        counts_toward_used_sessions: false,
+      })
+      .eq("student_id", student.id)
+      .eq("session_date", parsed.data.sessionDate)
+      .eq("session_time", parsed.data.sessionTime)
+      .eq("status", "scheduled")
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      return {
+        ok: false,
+        replyText: error.message,
+        errors: [error.message],
+        quickReplies: [],
+      };
+    }
+
+    if (!cancelledSession) {
+      return {
+        ok: false,
+        replyText: "這堂課已被完成或取消，沒有重複處理。",
+        errors: ["這堂課已被處理"],
+        quickReplies: [
+          { label: "課程", text: "課程" },
+          { label: "返回", text: "返回" },
+        ],
+      };
+    }
+
+    return {
+      ok: true,
+      replyText: [
+        "課程已取消",
+        "",
+        `日期：${parsed.data.displayDate}`,
+        `時間：${parsed.data.displayTime}`,
+        "",
+        "本次不扣堂數，學生端已同步更新。",
+      ].join("\n"),
+      errors: [],
+      quickReplies: [
+        { label: "課程", text: "課程" },
+        { label: "返回", text: "返回" },
+      ],
+    };
+  }
+
   return {
     ok: true,
     replyText: "繳費操作下一步會接上：登記已繳、改回未繳。",
     errors: [],
     quickReplies: [],
+  };
+}
+
+async function getScheduledSessionChoices() {
+  const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+  if (!student) {
+    return {
+      ok: false as const,
+      errors: ["找不到學生資料，無法讀取預約課程"],
+    };
+  }
+
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("class_sessions")
+    .select("session_date, session_time")
+    .eq("student_id", student.id)
+    .eq("status", "scheduled")
+    .order("session_date", { ascending: true })
+    .order("session_time", { ascending: true })
+    .limit(10);
+
+  if (error) {
+    return {
+      ok: false as const,
+      errors: [error.message],
+    };
+  }
+
+  return {
+    ok: true as const,
+    sessions: data ?? [],
   };
 }
 

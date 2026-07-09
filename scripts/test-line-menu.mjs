@@ -135,6 +135,20 @@ if (
   throw new Error("LINE course type choices were not returned as expected.");
 }
 
+const cancelCourse = await sendMenuCommand("取消課程");
+const cancelCourseMessage = cancelCourse.body.replies?.[0]?.reply?.payload?.messages?.[0];
+const cancelCourseLabels = (cancelCourseMessage?.quickReply?.items ?? []).map((item) => item.action?.label);
+
+if (
+  !cancelCourse.response.ok ||
+  !cancelCourseMessage?.text.includes("請選擇要取消的課程") ||
+  !cancelCourseLabels.includes("返回") ||
+  cancelCourse.body.replies?.[0]?.pending !== null
+) {
+  console.error(JSON.stringify(cancelCourse.body, null, 2));
+  throw new Error("LINE course cancellation choices were not returned as expected.");
+}
+
 console.log("LINE menu test OK");
 console.log(
   JSON.stringify(
@@ -146,6 +160,7 @@ console.log(
       newBookingPrompt: newBookingMessage.text,
       completeCourseLabels,
       selectedCourseLabels,
+      cancelCourseLabels,
     },
     null,
     2,
