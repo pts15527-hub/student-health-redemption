@@ -46,6 +46,13 @@ textarea {
   margin-bottom: 18px;
 }
 
+.topbar > *,
+.section-heading > *,
+.detail-row > *,
+.record-summary > * {
+  min-width: 0;
+}
+
 .eyebrow {
   margin: 0 0 4px;
   color: #7d6b56;
@@ -248,6 +255,11 @@ h3 {
   font-weight: 900;
 }
 
+.badge.unavailable {
+  color: #874437;
+  background: #f5e7e2;
+}
+
 .danger {
   color: #9a3b2b;
 }
@@ -265,7 +277,6 @@ h3 {
   background: #f7f4ee;
 }
 
-.record-summary,
 .payment-row,
 .detail-row {
   display: flex;
@@ -276,10 +287,40 @@ h3 {
   border-bottom: 1px solid rgba(50, 75, 67, 0.1);
 }
 
-.record-summary:last-child,
 .payment-row:last-child,
 .detail-row:last-child {
   border-bottom: 0;
+}
+
+.record-list {
+  display: grid;
+}
+
+.record-summary {
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(50, 75, 67, 0.1);
+}
+
+.record-summary:last-of-type {
+  border-bottom: 0;
+}
+
+.record-summary summary {
+  overflow-wrap: anywhere;
+}
+
+.record-summary[open] summary {
+  margin-bottom: 12px;
+}
+
+.detail-row strong {
+  max-width: 70%;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.empty-state {
+  overflow-wrap: anywhere;
 }
 
 details summary {
@@ -375,5 +416,36 @@ details summary {
     border: 1px solid rgba(50, 75, 67, 0.14);
     border-radius: 14px;
     box-shadow: 0 16px 42px rgba(31, 45, 40, 0.14);
+  }
+}
+
+@media (max-width: 420px) {
+  .shell {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .panel,
+  .card {
+    padding: 15px;
+  }
+
+  .hero {
+    padding: 18px;
+  }
+
+  .section-heading {
+    align-items: flex-start;
+  }
+
+  .detail-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .detail-row strong {
+    max-width: 100%;
+    text-align: left;
   }
 }

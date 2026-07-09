@@ -24,36 +24,63 @@ export default async function SessionsPage({ params }: { params: Promise<{ share
         </div>
       </header>
 
-      <section className="panel">
-        <div className="stat-grid">
-          <StatCard label="總堂數" value={bundle.stats.totalSessions} />
-          <StatCard label="已上課" value={bundle.stats.completedSessions} accent />
-          <StatCard label="已預約" value={bundle.stats.scheduledSessions} />
-          <StatCard label="可預約" value={bundle.stats.remainingBookableSessions} />
-        </div>
-      </section>
+      {bundle.courseContract ? (
+        <>
+          <section className="panel">
+            <div className="stat-grid">
+              <StatCard label="總堂數" value={bundle.stats.totalSessions} />
+              <StatCard label="已上課" value={bundle.stats.completedSessions} accent />
+              <StatCard label="已預約" value={bundle.stats.scheduledSessions} />
+              <StatCard label="剩餘堂數" value={bundle.stats.remainingSessions} />
+              <StatCard label="可預約" value={bundle.stats.remainingBookableSessions} />
+            </div>
+          </section>
 
-      <section className="panel">
-        <h2>合約摘要</h2>
-        <div className="grid">
-          <div className="detail-row">
-            <span>專案名稱</span>
-            <strong>{bundle.student.project_name}</strong>
-          </div>
-          <div className="detail-row">
-            <span>正式起算日</span>
-            <strong>{formatDate(bundle.courseContract?.start_date)}</strong>
-          </div>
-          <div className="detail-row">
-            <span>專案期間</span>
-            <strong>{bundle.courseContract?.duration_months ?? 0} 個月，含 {bundle.courseContract?.buffer_months ?? 0} 個月緩衝期</strong>
-          </div>
-        </div>
-        {bundle.courseContract?.service_items.length ? <p className="muted">服務內容：{bundle.courseContract.service_items.join("、")}</p> : null}
-        {bundle.student.risk_notes.map((note) => (
-          <p className="muted" key={note}>{note}</p>
-        ))}
-      </section>
+          <section className="panel">
+            <h2>合約摘要</h2>
+            <div className="grid">
+              <div className="detail-row">
+                <span>專案名稱</span>
+                <strong>{bundle.student.project_name}</strong>
+              </div>
+              <div className="detail-row">
+                <span>課程方案</span>
+                <strong>{bundle.courseContract.plan_name}</strong>
+              </div>
+              <div className="detail-row">
+                <span>正式起算日</span>
+                <strong>{formatDate(bundle.courseContract.start_date)}</strong>
+              </div>
+              <div className="detail-row">
+                <span>專案期間</span>
+                <strong>
+                  {bundle.courseContract.duration_months} 個月，含 {bundle.courseContract.buffer_months} 個月緩衝期
+                </strong>
+              </div>
+              {bundle.courseContract.location && (
+                <div className="detail-row">
+                  <span>上課地點</span>
+                  <strong>{bundle.courseContract.location}</strong>
+                </div>
+              )}
+            </div>
+            {bundle.courseContract.service_items.length ? (
+              <p className="muted">服務內容：{bundle.courseContract.service_items.join("、")}</p>
+            ) : null}
+            {bundle.courseContract.notes && <p className="muted">{bundle.courseContract.notes}</p>}
+            {bundle.student.risk_notes.map((note) => (
+              <p className="muted" key={note}>
+                {note}
+              </p>
+            ))}
+          </section>
+        </>
+      ) : (
+        <section className="panel empty-state">
+          <h2>尚無課程合約</h2>
+          <p className="muted">課程權益資料設定後會顯示在這裡。</p>
+        </section>
+      )}
 
       <section className="panel anchor-section" id="scheduled">
         <div className="section-heading">

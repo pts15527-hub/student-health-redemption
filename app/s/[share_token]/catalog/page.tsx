@@ -18,7 +18,11 @@ const categoryOrder = [
 export default async function CatalogPage({ params }: { params: Promise<{ share_token: string }> }) {
   const { share_token } = await params;
   const bundle = await getStudentBundle(share_token);
-  const categories = categoryOrder.filter((category) => bundle.products.some((product) => product.category === category));
+  const productCategories = Array.from(new Set(bundle.products.map((product) => product.category)));
+  const categories = [
+    ...categoryOrder.filter((category) => productCategories.includes(category)),
+    ...productCategories.filter((category) => !categoryOrder.includes(category)),
+  ];
 
   return (
     <main className="stack">
@@ -28,6 +32,8 @@ export default async function CatalogPage({ params }: { params: Promise<{ share_
           <h1>分類瀏覽</h1>
         </div>
       </header>
+
+      {!categories.length && <section className="panel empty-state">目前尚無可顯示的商品</section>}
 
       {categories.map((category) => (
         <section className="panel" key={category}>
@@ -42,7 +48,9 @@ export default async function CatalogPage({ params }: { params: Promise<{ share_
                 return (
                   <article className="card product-card" key={product.id}>
                     {product.image_src && <img src={product.image_src} alt={product.image_alt ?? product.name} />}
-                    <span className="badge">{product.is_available ? "可兌換" : "暫停"}</span>
+                    <span className={`badge ${product.is_available ? "" : "unavailable"}`}>
+                      {product.is_available ? "可兌換" : "暫停兌換"}
+                    </span>
                     <h3>{product.name}</h3>
                     <p className="muted">{product.specification}</p>
                     <p>{product.primary_benefits}</p>

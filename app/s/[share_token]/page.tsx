@@ -6,6 +6,7 @@ import { getStudentBundle } from "@/lib/data";
 export default async function StudentHomePage({ params }: { params: Promise<{ share_token: string }> }) {
   const { share_token } = await params;
   const bundle = await getStudentBundle(share_token);
+  const creditUnit = bundle.packagePlan?.credit_unit_label ?? "組";
   const nextSession = bundle.classSessions
     .filter((session) => session.status === "scheduled")
     .sort((a, b) => `${a.session_date} ${a.session_time ?? ""}`.localeCompare(`${b.session_date} ${b.session_time ?? ""}`))[0];
@@ -19,9 +20,15 @@ export default async function StudentHomePage({ params }: { params: Promise<{ sh
           <h1>{bundle.student.name}</h1>
           <strong>
             {bundle.stats.remainingCredits}
-            {bundle.packagePlan?.credit_unit_label ?? "組"}
+            {creditUnit}
           </strong>
-          <p className="muted">總共 {bundle.stats.totalCredits} 組，已扣 {bundle.stats.usedCredits} 組</p>
+          {bundle.packagePlan ? (
+            <p className="muted">
+              總共 {bundle.stats.totalCredits} {creditUnit}，已扣 {bundle.stats.usedCredits} {creditUnit}
+            </p>
+          ) : (
+            <p className="muted">目前尚無保健食品方案</p>
+          )}
         </div>
         <Link className="primary-button" href={`/s/${share_token}/payments`}>
           查看繳費狀態
@@ -50,7 +57,8 @@ export default async function StudentHomePage({ params }: { params: Promise<{ sh
             <>
               <h2>{formatDate(latestRecord.record_date)}</h2>
               <p>
-                扣 {latestRecord.credit_used} 組｜剩餘 {latestRecord.remaining_after ?? bundle.stats.remainingCredits} 組
+                扣 {latestRecord.credit_used} {creditUnit}｜剩餘 {latestRecord.remaining_after ?? bundle.stats.remainingCredits}{" "}
+                {creditUnit}
               </p>
               {latestRecord.notes && <p className="muted">{latestRecord.notes}</p>}
             </>
@@ -67,16 +75,20 @@ export default async function StudentHomePage({ params }: { params: Promise<{ sh
             查看課程
           </Link>
         </div>
-        <div className="stat-grid">
-          <StatCard label="總堂數" value={bundle.stats.totalSessions} />
-          <StatCard label="已上課" value={bundle.stats.completedSessions} accent />
-          <StatCard
-            label="已預約"
-            value={bundle.stats.scheduledSessions}
-            href={`/s/${share_token}/sessions#scheduled`}
-          />
-          <StatCard label="可預約" value={bundle.stats.remainingBookableSessions} />
-        </div>
+        {bundle.courseContract ? (
+          <div className="stat-grid">
+            <StatCard label="總堂數" value={bundle.stats.totalSessions} />
+            <StatCard label="已上課" value={bundle.stats.completedSessions} accent />
+            <StatCard
+              label="已預約"
+              value={bundle.stats.scheduledSessions}
+              href={`/s/${share_token}/sessions#scheduled`}
+            />
+            <StatCard label="可預約" value={bundle.stats.remainingBookableSessions} />
+          </div>
+        ) : (
+          <p className="muted empty-state">目前尚無課程合約</p>
+        )}
       </section>
     </main>
   );
