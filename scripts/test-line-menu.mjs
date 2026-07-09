@@ -161,6 +161,48 @@ if (
   throw new Error("LINE exit command was not returned as expected.");
 }
 
+const paymentMenu = await sendMenuCommand("繳費");
+const paymentMessage = paymentMenu.body.replies?.[0]?.reply?.payload?.messages?.[0];
+const paymentLabels = (paymentMessage?.quickReply?.items ?? []).map((item) => item.action?.label);
+const installmentLabels = paymentLabels.filter((label) => label?.startsWith("第"));
+
+if (
+  !paymentMenu.response.ok ||
+  !paymentMessage?.text.includes("裔甯繳費管理") ||
+  installmentLabels.length !== 6 ||
+  !paymentLabels.includes("返回") ||
+  !paymentLabels.includes("結束") ||
+  paymentMenu.body.replies?.[0]?.pending !== null
+) {
+  console.error(JSON.stringify(paymentMenu.body, null, 2));
+  throw new Error("LINE payment menu was not returned as expected.");
+}
+
+const firstInstallmentNo = Number(installmentLabels[0].match(/^第(\d+)期/)?.[1]);
+const selectedPayment = await sendMenuCommand(`選擇繳費 第${firstInstallmentNo}期`);
+const selectedPaymentMessage = selectedPayment.body.replies?.[0]?.reply?.payload?.messages?.[0];
+
+if (
+  !selectedPayment.response.ok ||
+  !selectedPaymentMessage?.text.match(/登記第 \d+ 期繳費|第 \d+ 期已繳/) ||
+  selectedPayment.body.replies?.[0]?.pending !== null
+) {
+  console.error(JSON.stringify(selectedPayment.body, null, 2));
+  throw new Error("LINE selected payment response was not returned as expected.");
+}
+
+const fullWidthPaymentDate = await sendMenuCommand("第99期 ７／１０");
+const fullWidthPaymentMessage = fullWidthPaymentDate.body.replies?.[0]?.reply?.payload?.messages?.[0];
+
+if (
+  fullWidthPaymentDate.response.status !== 200 ||
+  !fullWidthPaymentMessage?.text.includes("找不到第 99 期繳費資料") ||
+  fullWidthPaymentMessage.text.includes("第一行或第一個欄位需要是日期")
+) {
+  console.error(JSON.stringify(fullWidthPaymentDate.body, null, 2));
+  throw new Error("LINE full-width payment date input was not routed correctly.");
+}
+
 console.log("LINE menu test OK");
 console.log(
   JSON.stringify(
@@ -173,6 +215,7 @@ console.log(
       completeCourseLabels,
       selectedCourseLabels,
       cancelCourseLabels,
+      paymentLabels,
     },
     null,
     2,

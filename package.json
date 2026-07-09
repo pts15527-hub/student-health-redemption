@@ -15,6 +15,7 @@
     "test:course-booking-parser": "node scripts/test-course-booking-parser.mjs",
     "test:line-course-completion": "node scripts/test-line-course-completion.mjs",
     "test:line-course-cancellation": "node scripts/test-line-course-cancellation.mjs",
+    "test:line-payment-management": "node scripts/test-line-payment-management.mjs",
     "test:line-event": "node scripts/test-line-event.mjs",
     "test:line-admin-auth": "node scripts/test-line-admin-auth.mjs",
     "test:line-confirm": "node scripts/test-line-confirm.mjs",

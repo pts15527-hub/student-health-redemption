@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { requireEnv } from "@/lib/env";
+import { requireEnv } from "../env.ts";
 
 export function createSupabaseServerClient() {
   return createClient(requireEnv("SUPABASE_URL"), requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {

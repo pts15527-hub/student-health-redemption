@@ -9,6 +9,12 @@ import {
   confirmPendingRedemption,
   findLatestPendingRedemption,
 } from "@/lib/line/pending-redemptions";
+import {
+  getLinePaymentRecord,
+  listLinePaymentRecords,
+  markLinePaymentPaid,
+  markLinePaymentUnpaid,
+} from "@/lib/line/payment-management";
 import { parseRedemptionMessage } from "@/lib/line/redemption-parser";
 import { replyLineText } from "@/lib/line/reply";
 import { verifyLineSignatureGuard } from "@/lib/line/signature";
@@ -520,7 +526,7 @@ function toWebhookParsedPayload(data: Extract<ReturnType<typeof parseRedemptionM
 }
 
 async function buildLineMenuResponse(messageText: string, adminUserId: string) {
-  const normalizedText = messageText.trim();
+  const normalizedText = normalizeBookingInput(messageText);
   const selectedCompletionMatch = normalizedText.match(
     /^選擇完成課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})$/,
   );
@@ -530,6 +536,9 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   const confirmedCancellationMatch = normalizedText.match(
     /^確認取消課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})$/,
   );
+  const selectedPaymentMatch = normalizedText.match(/^選擇繳費\s+第(\d+)期$/);
+  const paymentEntryMatch = normalizedText.match(/^第(\d+)期\s+(\d{1,2}\/\d{1,2})$/);
+  const markUnpaidMatch = normalizedText.match(/^改回未繳\s+第(\d+)期$/);
   const menuKeywords = ["裔甯", "邱裔甯", "選單", "返回"];
   const exitKeywords = ["結束"];
   const linkKeywords = ["學生端連結", "學生連結", "連結"];
@@ -544,6 +553,9 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
     Boolean(selectedCompletionMatch) ||
     Boolean(confirmedCompletionMatch) ||
     Boolean(confirmedCancellationMatch) ||
+    Boolean(selectedPaymentMatch) ||
+    Boolean(paymentEntryMatch) ||
+    Boolean(markUnpaidMatch) ||
     [
     ...menuKeywords,
     ...exitKeywords,
@@ -977,12 +989,183 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
     };
   }
 
-  return {
-    ok: true,
-    replyText: "繳費操作下一步會接上：登記已繳、改回未繳。",
-    errors: [],
-    quickReplies: [],
-  };
+  if (paymentKeywords.includes(normalizedText)) {
+    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+    if (!student) {
+      return lineMenuError("找不到學生資料，無法讀取繳費狀態。");
+    }
+
+    const { data: records, error } = await listLinePaymentRecords(student.id);
+
+    if (error) return lineMenuError(error.message);
+
+    return {
+      ok: true,
+      replyText: [
+        "裔甯繳費管理",
+        "",
+        "請選擇期數：",
+        ...(records ?? []).map(
+          (record) => `第 ${record.installment_no} 期｜${record.status === "paid" ? "已繳" : "未繳"}`,
+        ),
+      ].join("\n"),
+      errors: [],
+      quickReplies: [
+        ...(records ?? []).map((record) => ({
+          label: `第${record.installment_no}期 ${record.status === "paid" ? "已繳" : "未繳"}`,
+          text: `選擇繳費 第${record.installment_no}期`,
+        })),
+        { label: "返回", text: "返回" },
+        { label: "結束", text: "結束" },
+      ],
+    };
+  }
+
+  if (selectedPaymentMatch) {
+    const installmentNo = Number(selectedPaymentMatch[1]);
+    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+    if (!student) return lineMenuError("找不到學生資料，無法讀取繳費狀態。");
+
+    const { data: record, error } = await getLinePaymentRecord(student.id, installmentNo);
+
+    if (error) return lineMenuError(error.message);
+    if (!record) return lineMenuError(`找不到第 ${installmentNo} 期繳費資料。`);
+
+    if (record.status === "paid") {
+      return {
+        ok: true,
+        replyText: [
+          `第 ${installmentNo} 期已繳`,
+          `繳費日：${formatPaymentDate(record.paid_date)}`,
+          "",
+          "可直接改回未繳，不需二次確認。",
+        ].join("\n"),
+        errors: [],
+        quickReplies: [
+          { label: "改回未繳", text: `改回未繳 第${installmentNo}期` },
+          { label: "返回", text: "返回" },
+          { label: "結束", text: "結束" },
+        ],
+      };
+    }
+
+    return {
+      ok: true,
+      replyText: [
+        `登記第 ${installmentNo} 期繳費`,
+        "",
+        "請輸入期數與實際繳費日：",
+        `第${installmentNo}期 ７／１０`,
+        "",
+        "全形、半形皆可；不會預設為今天。",
+      ].join("\n"),
+      errors: [],
+      quickReplies: [
+        { label: "返回", text: "返回" },
+        { label: "結束", text: "結束" },
+      ],
+    };
+  }
+
+  if (paymentEntryMatch) {
+    const installmentNo = Number(paymentEntryMatch[1]);
+    const parsedDate = parseBookingInput(`${paymentEntryMatch[2]} 00:00`);
+
+    if (!parsedDate.ok) return lineMenuError(parsedDate.error);
+
+    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+    if (!student) return lineMenuError("找不到學生資料，無法登記繳費。");
+
+    const { data: currentRecord, error: currentError } = await getLinePaymentRecord(
+      student.id,
+      installmentNo,
+    );
+
+    if (currentError) return lineMenuError(currentError.message);
+    if (!currentRecord) return lineMenuError(`找不到第 ${installmentNo} 期繳費資料。`);
+    if (currentRecord.status === "paid") {
+      return lineMenuError(`第 ${installmentNo} 期已經是已繳，沒有重複登記。`);
+    }
+
+    const { data: record, error } = await markLinePaymentPaid(
+      student.id,
+      installmentNo,
+      parsedDate.data.sessionDate,
+    );
+
+    if (error) return lineMenuError(error.message);
+
+    if (!record) {
+      return lineMenuError(`第 ${installmentNo} 期狀態已變更，請重新開啟繳費選單。`);
+    }
+
+    return {
+      ok: true,
+      replyText: [
+        "繳費已登記",
+        "",
+        `期數：第 ${installmentNo} 期`,
+        `繳費日：${parsedDate.data.displayDate}`,
+        "",
+        "學生端已同步更新。",
+      ].join("\n"),
+      errors: [],
+      quickReplies: [
+        { label: "繳費", text: "繳費" },
+        { label: "返回", text: "返回" },
+        { label: "結束", text: "結束" },
+      ],
+    };
+  }
+
+  if (markUnpaidMatch) {
+    const installmentNo = Number(markUnpaidMatch[1]);
+    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+    if (!student) return lineMenuError("找不到學生資料，無法修改繳費狀態。");
+
+    const { data: currentRecord, error: currentError } = await getLinePaymentRecord(
+      student.id,
+      installmentNo,
+    );
+
+    if (currentError) return lineMenuError(currentError.message);
+    if (!currentRecord) return lineMenuError(`找不到第 ${installmentNo} 期繳費資料。`);
+    if (currentRecord.status !== "paid") {
+      return lineMenuError(`第 ${installmentNo} 期目前不是已繳，沒有重複修改。`);
+    }
+
+    const { data: record, error } = await markLinePaymentUnpaid(student.id, installmentNo);
+
+    if (error) return lineMenuError(error.message);
+
+    if (!record) {
+      return lineMenuError(`第 ${installmentNo} 期狀態已變更，請重新開啟繳費選單。`);
+    }
+
+    return {
+      ok: true,
+      replyText: [
+        "已改回未繳",
+        "",
+        `期數：第 ${installmentNo} 期`,
+        "繳費日期已清除。",
+        "",
+        "學生端已同步更新。",
+      ].join("\n"),
+      errors: [],
+      quickReplies: [
+        { label: "繳費", text: "繳費" },
+        { label: "返回", text: "返回" },
+        { label: "結束", text: "結束" },
+      ],
+    };
+  }
+
+  return null;
 }
 
 async function getScheduledSessionChoices() {
@@ -1022,6 +1205,24 @@ function formatSessionChoice(date: string, time: string | null) {
   const [, month, day] = date.split("-");
   const displayTime = time ? time.slice(0, 5) : "未定";
   return `${Number(month)}/${Number(day)} ${displayTime}`;
+}
+
+function formatPaymentDate(date: string | null) {
+  if (!date) return "未記錄";
+  const [, month, day] = date.split("-");
+  return `${Number(month)}/${Number(day)}`;
+}
+
+function lineMenuError(message: string) {
+  return {
+    ok: false,
+    replyText: message,
+    errors: [message],
+    quickReplies: [
+      { label: "返回", text: "返回" },
+      { label: "結束", text: "結束" },
+    ],
+  };
 }
 
 function getPublicSiteUrl() {
