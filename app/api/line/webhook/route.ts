@@ -1115,6 +1115,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
       errors: [],
       quickReplies: [
         { label: "繳費", text: "繳費" },
+        { label: "課程", text: "課程" },
         { label: "返回", text: "返回" },
         { label: "結束", text: "結束" },
       ],
@@ -1159,6 +1160,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
       errors: [],
       quickReplies: [
         { label: "繳費", text: "繳費" },
+        { label: "課程", text: "課程" },
         { label: "返回", text: "返回" },
         { label: "結束", text: "結束" },
       ],
