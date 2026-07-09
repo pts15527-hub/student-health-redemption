@@ -531,6 +531,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
     /^確認取消課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})$/,
   );
   const menuKeywords = ["裔甯", "邱裔甯", "選單", "返回"];
+  const exitKeywords = ["結束"];
   const linkKeywords = ["學生端連結", "學生連結", "連結"];
   const supplementKeywords = ["保健食品", "領取", "新增領取紀錄"];
   const courseKeywords = ["課程"];
@@ -545,6 +546,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
     Boolean(confirmedCancellationMatch) ||
     [
     ...menuKeywords,
+    ...exitKeywords,
     ...linkKeywords,
     ...supplementKeywords,
     ...courseKeywords,
@@ -587,6 +589,15 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
         { label: "保健食品", text: "保健食品" },
         { label: "學生端連結", text: "學生端連結" },
       ],
+    };
+  }
+
+  if (exitKeywords.includes(normalizedText)) {
+    return {
+      ok: true,
+      replyText: "已結束裔甯管理。\n需要時再輸入「裔甯」即可開啟管理選單。",
+      errors: [],
+      quickReplies: [],
     };
   }
 
@@ -884,6 +895,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
       quickReplies: [
         { label: "課程", text: "課程" },
         { label: "返回", text: "返回" },
+        { label: "結束", text: "結束" },
       ],
     };
   }
@@ -960,6 +972,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
       quickReplies: [
         { label: "課程", text: "課程" },
         { label: "返回", text: "返回" },
+        { label: "結束", text: "結束" },
       ],
     };
   }

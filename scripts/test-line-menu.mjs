@@ -149,6 +149,18 @@ if (
   throw new Error("LINE course cancellation choices were not returned as expected.");
 }
 
+const exitMenu = await sendMenuCommand("結束");
+const exitMessage = exitMenu.body.replies?.[0]?.reply?.payload?.messages?.[0];
+
+if (
+  !exitMenu.response.ok ||
+  !exitMessage?.text.includes("已結束裔甯管理") ||
+  exitMessage.quickReply
+) {
+  console.error(JSON.stringify(exitMenu.body, null, 2));
+  throw new Error("LINE exit command was not returned as expected.");
+}
+
 console.log("LINE menu test OK");
 console.log(
   JSON.stringify(

@@ -78,6 +78,14 @@ try {
     throw new Error(`Course cancellation failed: ${JSON.stringify(body)}`);
   }
 
+  const cancellationLabels = (
+    body.replies[0].reply.payload.messages[0]?.quickReply?.items ?? []
+  ).map((item) => item.action?.label);
+
+  if (!["課程", "返回", "結束"].every((label) => cancellationLabels.includes(label))) {
+    throw new Error(`Course cancellation actions are incomplete: ${JSON.stringify(cancellationLabels)}`);
+  }
+
   const { data: cancelled, error: cancelledError } = await supabase
     .from("class_sessions")
     .select("status, counts_toward_used_sessions")

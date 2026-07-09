@@ -78,6 +78,14 @@ try {
     throw new Error(`Course completion failed: ${JSON.stringify(body)}`);
   }
 
+  const completionLabels = (
+    body.replies[0].reply.payload.messages[0]?.quickReply?.items ?? []
+  ).map((item) => item.action?.label);
+
+  if (!["課程", "返回", "結束"].every((label) => completionLabels.includes(label))) {
+    throw new Error(`Course completion actions are incomplete: ${JSON.stringify(completionLabels)}`);
+  }
+
   const { data: completed, error: completedError } = await supabase
     .from("class_sessions")
     .select("status, title, counts_toward_used_sessions")
