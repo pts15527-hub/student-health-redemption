@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { getStudentByShareToken } from "@/lib/data";
 import { verifyLineAdminUserId } from "@/lib/line/admin-auth";
 import { normalizeBookingInput, parseBookingInput } from "@/lib/line/course-booking";
 import { extractLineTextCommands, isLineWebhookBody } from "@/lib/line/events";
@@ -24,6 +23,7 @@ import {
   getActiveLineStudent,
   setActiveLineStudent,
 } from "@/lib/line/student-context";
+import { loadStudentRedemptionPlan } from "@/lib/line/student-redemption-plan";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { yiNingPackagePlan } from "@/src/data/students/yi-ning";
 import type { Student } from "@/types/domain";
@@ -483,7 +483,24 @@ async function buildParsedRedemptionResponse(input: BuildResponseInput): Promise
     };
   }
 
-  const parsed = parseRedemptionMessage(input.messageText, yiNingPackagePlan);
+  if (typeof input.shareToken !== "string") {
+    return {
+      ok: false,
+      errors: ["shareToken 必須是非空白文字"],
+      status: 400,
+    };
+  }
+
+  const planResult = await loadStudentRedemptionPlan(input.shareToken);
+  if (!planResult.ok) {
+    return {
+      ok: false,
+      errors: planResult.errors,
+      status: 404,
+    };
+  }
+
+  const parsed = parseRedemptionMessage(input.messageText, planResult.plan);
 
   if (!parsed.ok) {
     return {
@@ -510,23 +527,12 @@ async function buildParsedRedemptionResponse(input: BuildResponseInput): Promise
       };
     }
 
-    const student =
-      typeof input.shareToken === "string" ? await getStudentByShareToken(input.shareToken) : null;
-
-    if (!student) {
-      return {
-        ok: false,
-        errors: ["找不到學生資料，無法建立 pending redemption"],
-        status: 404,
-      };
-    }
-
     const expiresAt = new Date(Date.now() + PENDING_TTL_MINUTES * 60 * 1000).toISOString();
     const supabase = createSupabaseServerClient();
     const { data: pending, error } = await supabase
       .from("pending_redemptions")
       .insert({
-        student_id: student.id,
+        student_id: planResult.student.id,
         source: input.pendingSource,
         raw_message: input.messageText,
         reply_text: parsed.data.confirmationText,
