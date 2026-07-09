@@ -521,6 +521,9 @@ function toWebhookParsedPayload(data: Extract<ReturnType<typeof parseRedemptionM
 
 async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   const normalizedText = messageText.trim();
+  const selectedCompletionMatch = normalizedText.match(
+    /^選擇完成課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})$/,
+  );
   const menuKeywords = ["裔甯", "邱裔甯", "選單", "返回"];
   const linkKeywords = ["學生端連結", "學生連結", "連結"];
   const supplementKeywords = ["保健食品", "領取", "新增領取紀錄"];
@@ -529,7 +532,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   const completeCourseKeywords = ["完成課程"];
   const paymentKeywords = ["繳費", "付款"];
 
-  const isMenuCommand = [
+  const isMenuCommand = Boolean(selectedCompletionMatch) || [
     ...menuKeywords,
     ...linkKeywords,
     ...supplementKeywords,
@@ -680,6 +683,74 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
             text: `選擇完成課程 ${label}`,
           };
         }),
+        { label: "返回", text: "返回" },
+      ],
+    };
+  }
+
+  if (selectedCompletionMatch) {
+    const parsed = parseBookingInput(selectedCompletionMatch[1]);
+
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        replyText: parsed.error,
+        errors: [parsed.error],
+        quickReplies: [{ label: "返回", text: "返回" }],
+      };
+    }
+
+    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+    if (!student) {
+      return {
+        ok: false,
+        replyText: "找不到學生資料，無法選擇課程。",
+        errors: ["找不到學生資料，無法選擇課程"],
+        quickReplies: [],
+      };
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { data: session, error } = await supabase
+      .from("class_sessions")
+      .select("id")
+      .eq("student_id", student.id)
+      .eq("session_date", parsed.data.sessionDate)
+      .eq("session_time", parsed.data.sessionTime)
+      .eq("status", "scheduled")
+      .maybeSingle();
+
+    if (error) {
+      return {
+        ok: false,
+        replyText: error.message,
+        errors: [error.message],
+        quickReplies: [],
+      };
+    }
+
+    if (!session) {
+      return {
+        ok: false,
+        replyText: "找不到這堂已預約課程，可能已被完成或取消。",
+        errors: ["找不到這堂已預約課程"],
+        quickReplies: [
+          { label: "完成課程", text: "完成課程" },
+          { label: "返回", text: "返回" },
+        ],
+      };
+    }
+
+    const sessionLabel = `${parsed.data.displayDate} ${parsed.data.displayTime}`;
+
+    return {
+      ok: true,
+      replyText: [`已選擇：${sessionLabel}`, "", "請選擇這堂課的類型："].join("\n"),
+      errors: [],
+      quickReplies: [
+        { label: "訓練", text: `確認完成課程 ${sessionLabel} 訓練` },
+        { label: "矯正", text: `確認完成課程 ${sessionLabel} 矯正` },
         { label: "返回", text: "返回" },
       ],
     };

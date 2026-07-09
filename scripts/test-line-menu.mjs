@@ -120,6 +120,21 @@ if (
   throw new Error("LINE complete course choices were not returned as expected.");
 }
 
+const selectableSession = completeCourseLabels.find((label) => label !== "返回");
+const selectedCourse = await sendMenuCommand(`選擇完成課程 ${selectableSession}`);
+const selectedCourseMessage = selectedCourse.body.replies?.[0]?.reply?.payload?.messages?.[0];
+const selectedCourseLabels = (selectedCourseMessage?.quickReply?.items ?? []).map((item) => item.action?.label);
+
+if (
+  !selectedCourse.response.ok ||
+  !selectedCourseMessage?.text.includes("請選擇這堂課的類型") ||
+  !["訓練", "矯正", "返回"].every((label) => selectedCourseLabels.includes(label)) ||
+  selectedCourse.body.replies?.[0]?.pending !== null
+) {
+  console.error(JSON.stringify(selectedCourse.body, null, 2));
+  throw new Error("LINE course type choices were not returned as expected.");
+}
+
 console.log("LINE menu test OK");
 console.log(
   JSON.stringify(
@@ -130,6 +145,7 @@ console.log(
       courseLabels,
       newBookingPrompt: newBookingMessage.text,
       completeCourseLabels,
+      selectedCourseLabels,
     },
     null,
     2,
