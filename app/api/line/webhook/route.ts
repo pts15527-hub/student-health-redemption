@@ -524,6 +524,9 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   const selectedCompletionMatch = normalizedText.match(
     /^選擇完成課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})$/,
   );
+  const confirmedCompletionMatch = normalizedText.match(
+    /^確認完成課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})\s+(訓練|矯正)$/,
+  );
   const menuKeywords = ["裔甯", "邱裔甯", "選單", "返回"];
   const linkKeywords = ["學生端連結", "學生連結", "連結"];
   const supplementKeywords = ["保健食品", "領取", "新增領取紀錄"];
@@ -532,7 +535,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   const completeCourseKeywords = ["完成課程"];
   const paymentKeywords = ["繳費", "付款"];
 
-  const isMenuCommand = Boolean(selectedCompletionMatch) || [
+  const isMenuCommand = Boolean(selectedCompletionMatch) || Boolean(confirmedCompletionMatch) || [
     ...menuKeywords,
     ...linkKeywords,
     ...supplementKeywords,
@@ -751,6 +754,85 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
       quickReplies: [
         { label: "訓練", text: `確認完成課程 ${sessionLabel} 訓練` },
         { label: "矯正", text: `確認完成課程 ${sessionLabel} 矯正` },
+        { label: "返回", text: "返回" },
+      ],
+    };
+  }
+
+  if (confirmedCompletionMatch) {
+    const parsed = parseBookingInput(confirmedCompletionMatch[1]);
+    const courseType = confirmedCompletionMatch[2];
+
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        replyText: parsed.error,
+        errors: [parsed.error],
+        quickReplies: [{ label: "返回", text: "返回" }],
+      };
+    }
+
+    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+
+    if (!student) {
+      return {
+        ok: false,
+        replyText: "找不到學生資料，無法完成課程。",
+        errors: ["找不到學生資料，無法完成課程"],
+        quickReplies: [],
+      };
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { data: completedSession, error } = await supabase
+      .from("class_sessions")
+      .update({
+        status: "completed",
+        title: courseType,
+        counts_toward_used_sessions: true,
+      })
+      .eq("student_id", student.id)
+      .eq("session_date", parsed.data.sessionDate)
+      .eq("session_time", parsed.data.sessionTime)
+      .eq("status", "scheduled")
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      return {
+        ok: false,
+        replyText: error.message,
+        errors: [error.message],
+        quickReplies: [],
+      };
+    }
+
+    if (!completedSession) {
+      return {
+        ok: false,
+        replyText: "這堂課已被完成或取消，沒有重複扣除堂數。",
+        errors: ["這堂課已被處理"],
+        quickReplies: [
+          { label: "課程", text: "課程" },
+          { label: "返回", text: "返回" },
+        ],
+      };
+    }
+
+    return {
+      ok: true,
+      replyText: [
+        "課程已完成",
+        "",
+        `日期：${parsed.data.displayDate}`,
+        `時間：${parsed.data.displayTime}`,
+        `類型：${courseType}`,
+        "",
+        "學生端已同步更新。",
+      ].join("\n"),
+      errors: [],
+      quickReplies: [
+        { label: "課程", text: "課程" },
         { label: "返回", text: "返回" },
       ],
     };
