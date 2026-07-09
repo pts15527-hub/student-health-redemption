@@ -154,11 +154,32 @@ const exitMessage = exitMenu.body.replies?.[0]?.reply?.payload?.messages?.[0];
 
 if (
   !exitMenu.response.ok ||
-  !exitMessage?.text.includes("已結束裔甯管理") ||
+  !exitMessage?.text.includes("已結束") ||
+  !exitMessage.text.includes("管理") ||
   exitMessage.quickReply
 ) {
   console.error(JSON.stringify(exitMenu.body, null, 2));
   throw new Error("LINE exit command was not returned as expected.");
+}
+
+const blockedAfterExit = await sendMenuCommand("繳費");
+const blockedMessage = blockedAfterExit.body.replies?.[0]?.reply?.payload?.messages?.[0];
+
+if (
+  !blockedAfterExit.response.ok ||
+  blockedAfterExit.body.ok !== false ||
+  !blockedMessage?.text.includes("請先輸入學生名字")
+) {
+  console.error(JSON.stringify(blockedAfterExit.body, null, 2));
+  throw new Error("LINE commands should be blocked after ending the active student context.");
+}
+
+const reselectedMenu = await sendMenuCommand("邱裔甯");
+const reselectedMessage = reselectedMenu.body.replies?.[0]?.reply?.payload?.messages?.[0];
+
+if (!reselectedMenu.response.ok || !reselectedMessage?.text.includes("裔甯管理選單")) {
+  console.error(JSON.stringify(reselectedMenu.body, null, 2));
+  throw new Error("LINE student alias should restore the active student context.");
 }
 
 const paymentMenu = await sendMenuCommand("繳費");

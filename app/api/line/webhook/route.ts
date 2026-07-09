@@ -18,8 +18,15 @@ import {
 import { parseRedemptionMessage } from "@/lib/line/redemption-parser";
 import { replyLineText } from "@/lib/line/reply";
 import { verifyLineSignatureGuard } from "@/lib/line/signature";
+import {
+  clearActiveLineStudent,
+  findStudentByAlias,
+  getActiveLineStudent,
+  setActiveLineStudent,
+} from "@/lib/line/student-context";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { yiNingPackagePlan } from "@/src/data/students/yi-ning";
+import type { Student } from "@/types/domain";
 
 type LocalWebhookPayload = {
   shareToken?: unknown;
@@ -84,7 +91,40 @@ async function handleLineWebhookBody(payload: unknown) {
   const replies = [];
 
   for (const command of commands) {
-    const bookingResult = await handleBookingInput(command.messageText, command.adminUserId);
+    const contextResult = await handleStudentContextCommand(command.messageText, command.adminUserId);
+
+    if (contextResult) {
+      const replyResult = await replyLineText(command.replyToken, contextResult.replyText, {
+        quickReplies: contextResult.quickReplies,
+      });
+
+      replies.push({
+        ok: contextResult.ok,
+        replyToken: command.replyToken,
+        reply: replyResult,
+        pending: null,
+        errors: contextResult.ok ? [] : contextResult.errors,
+      });
+
+      continue;
+    }
+
+    const activeStudent = await getActiveLineStudent(command.adminUserId);
+
+    if (!activeStudent) {
+      const replyText = "請先輸入學生名字，例如「裔甯」。";
+      const replyResult = await replyLineText(command.replyToken, replyText);
+      replies.push({
+        ok: false,
+        replyToken: command.replyToken,
+        reply: replyResult,
+        pending: null,
+        errors: [replyText],
+      });
+      continue;
+    }
+
+    const bookingResult = await handleBookingInput(command.messageText, command.adminUserId, activeStudent);
 
     if (bookingResult) {
       const replyResult = await replyLineText(command.replyToken, bookingResult.replyText, {
@@ -102,7 +142,7 @@ async function handleLineWebhookBody(payload: unknown) {
       continue;
     }
 
-    const pendingActionResult = await handlePendingAction(command.messageText, command.adminUserId);
+    const pendingActionResult = await handlePendingAction(command.messageText, command.adminUserId, activeStudent);
 
     if (pendingActionResult) {
       const replyResult = await replyLineText(command.replyToken, pendingActionResult.replyText);
@@ -118,7 +158,7 @@ async function handleLineWebhookBody(payload: unknown) {
       continue;
     }
 
-    const menuResult = await buildLineMenuResponse(command.messageText, command.adminUserId);
+    const menuResult = await buildLineMenuResponse(command.messageText, command.adminUserId, activeStudent);
 
     if (menuResult) {
       const replyResult = await replyLineText(command.replyToken, menuResult.replyText, {
@@ -137,7 +177,7 @@ async function handleLineWebhookBody(payload: unknown) {
     }
 
     const result = await buildParsedRedemptionResponse({
-      shareToken: yiNingPackagePlan.shareToken,
+      shareToken: activeStudent.share_token,
       messageText: command.messageText,
       persistPending: true,
       isTest: process.env.LINE_EVENT_TEST_MODE !== "false",
@@ -175,7 +215,41 @@ async function handleLineWebhookBody(payload: unknown) {
   });
 }
 
-async function handleBookingInput(messageText: string, adminUserId: string) {
+async function handleStudentContextCommand(messageText: string, adminUserId: string) {
+  const normalizedText = normalizeBookingInput(messageText);
+  const adminError = verifyLineAdminUserId(adminUserId);
+
+  if (adminError) {
+    const body = await adminError.json();
+    const errors = Array.isArray(body.errors) ? body.errors : ["操作者驗證失敗"];
+    return { ok: false, replyText: errors.join("\n"), errors, quickReplies: [] };
+  }
+
+  if (normalizedText === "結束") {
+    const activeStudent = await getActiveLineStudent(adminUserId);
+    const error = await clearActiveLineStudent(adminUserId);
+    if (error) return lineMenuError(error.message);
+
+    return {
+      ok: true,
+      replyText: activeStudent
+        ? `已結束${activeStudent.name}管理。\n需要時再輸入學生名字即可開啟管理選單。`
+        : "目前沒有正在管理的學生。",
+      errors: [],
+      quickReplies: [],
+    };
+  }
+
+  const matched = await findStudentByAlias(normalizedText);
+  if (!matched) return null;
+
+  const error = await setActiveLineStudent(adminUserId, matched.student.id);
+  if (error) return lineMenuError(error.message);
+
+  return buildStudentMainMenu(matched.student);
+}
+
+async function handleBookingInput(messageText: string, adminUserId: string, student: Student) {
   const normalizedText = normalizeBookingInput(messageText);
 
   if (!/^\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2}$/.test(normalizedText)) return null;
@@ -197,13 +271,6 @@ async function handleBookingInput(messageText: string, adminUserId: string) {
       errors: [parsed.error],
       quickReplies: [{ label: "返回", text: "返回" }],
     };
-  }
-
-  const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-  if (!student) {
-    const errors = ["找不到學生資料，無法新增預約"];
-    return { ok: false, replyText: errors[0], errors, quickReplies: [] };
   }
 
   const supabase = createSupabaseServerClient();
@@ -276,7 +343,7 @@ async function handleBookingInput(messageText: string, adminUserId: string) {
   };
 }
 
-async function handlePendingAction(messageText: string, adminUserId: string) {
+async function handlePendingAction(messageText: string, adminUserId: string, student: Student) {
   const normalizedText = messageText.trim();
   const isConfirm = ["確認送出", "確認"].includes(normalizedText);
   const isCancel = ["取消"].includes(normalizedText);
@@ -289,13 +356,6 @@ async function handlePendingAction(messageText: string, adminUserId: string) {
     const body = await adminError.json();
     const errors = Array.isArray(body.errors) ? body.errors : ["操作者驗證失敗"];
     return { ok: false, replyText: errors.join("\n"), errors };
-  }
-
-  const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-  if (!student) {
-    const errors = ["找不到學生資料"];
-    return { ok: false, replyText: errors[0], errors };
   }
 
   const latestResult = await findLatestPendingRedemption(student.id);
@@ -328,7 +388,7 @@ async function handlePendingAction(messageText: string, adminUserId: string) {
   if (actionResult.status === "cancelled") {
     return {
       ok: true,
-      replyText: "已取消這筆領取紀錄，沒有扣除組數。\n\n輸入「保健食品」可重新新增，輸入「返回」回到裔甯選單。",
+      replyText: `已取消這筆領取紀錄，沒有扣除組數。\n\n輸入「保健食品」可重新新增，輸入「返回」回到${student.name}選單。`,
       errors: [],
     };
   }
@@ -343,7 +403,7 @@ async function handlePendingAction(messageText: string, adminUserId: string) {
       `商品總數：${actionResult.totalBoxes} 盒`,
       "",
       "學生端已同步更新。",
-      "輸入「返回」回到裔甯選單。",
+      `輸入「返回」回到${student.name}選單。`,
     ].join("\n"),
     errors: [],
   };
@@ -450,7 +510,8 @@ async function buildParsedRedemptionResponse(input: BuildResponseInput): Promise
       };
     }
 
-    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
+    const student =
+      typeof input.shareToken === "string" ? await getStudentByShareToken(input.shareToken) : null;
 
     if (!student) {
       return {
@@ -525,7 +586,7 @@ function toWebhookParsedPayload(data: Extract<ReturnType<typeof parseRedemptionM
   };
 }
 
-async function buildLineMenuResponse(messageText: string, adminUserId: string) {
+async function buildLineMenuResponse(messageText: string, adminUserId: string, student: Student) {
   const normalizedText = normalizeBookingInput(messageText);
   const selectedCompletionMatch = normalizedText.match(
     /^選擇完成課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})$/,
@@ -539,8 +600,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   const selectedPaymentMatch = normalizedText.match(/^選擇繳費\s+第(\d+)期$/);
   const paymentEntryMatch = normalizedText.match(/^第(\d+)期\s+(\d{1,2}\/\d{1,2})$/);
   const markUnpaidMatch = normalizedText.match(/^改回未繳\s+第(\d+)期$/);
-  const menuKeywords = ["裔甯", "邱裔甯", "選單", "返回"];
-  const exitKeywords = ["結束"];
+  const menuKeywords = ["選單", "返回"];
   const linkKeywords = ["學生端連結", "學生連結", "連結"];
   const supplementKeywords = ["保健食品", "領取", "新增領取紀錄"];
   const courseKeywords = ["課程"];
@@ -558,7 +618,6 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
     Boolean(markUnpaidMatch) ||
     [
     ...menuKeywords,
-    ...exitKeywords,
     ...linkKeywords,
     ...supplementKeywords,
     ...courseKeywords,
@@ -583,40 +642,13 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   }
 
   if (menuKeywords.includes(normalizedText)) {
-    return {
-      ok: true,
-      replyText: [
-        "裔甯管理選單",
-        "",
-        "請輸入其中一項：",
-        "課程",
-        "繳費",
-        "保健食品",
-        "學生端連結",
-      ].join("\n"),
-      errors: [],
-      quickReplies: [
-        { label: "課程", text: "課程" },
-        { label: "繳費", text: "繳費" },
-        { label: "保健食品", text: "保健食品" },
-        { label: "學生端連結", text: "學生端連結" },
-      ],
-    };
-  }
-
-  if (exitKeywords.includes(normalizedText)) {
-    return {
-      ok: true,
-      replyText: "已結束裔甯管理。\n需要時再輸入「裔甯」即可開啟管理選單。",
-      errors: [],
-      quickReplies: [],
-    };
+    return buildStudentMainMenu(student);
   }
 
   if (linkKeywords.includes(normalizedText)) {
     return {
       ok: true,
-      replyText: `${getPublicSiteUrl()}/s/${yiNingPackagePlan.shareToken}`,
+      replyText: `${getPublicSiteUrl()}/s/${student.share_token}`,
       errors: [],
       quickReplies: [],
     };
@@ -643,7 +675,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   if (courseKeywords.includes(normalizedText)) {
     return {
       ok: true,
-      replyText: "裔甯課程管理\n\n請選擇操作：",
+      replyText: `${student.name}課程管理\n\n請選擇操作：`,
       errors: [],
       quickReplies: [
         { label: "新增預約", text: "新增預約" },
@@ -664,17 +696,6 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   }
 
   if (completeCourseKeywords.includes(normalizedText)) {
-    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-    if (!student) {
-      return {
-        ok: false,
-        replyText: "找不到學生資料，無法讀取預約課程。",
-        errors: ["找不到學生資料，無法讀取預約課程"],
-        quickReplies: [],
-      };
-    }
-
     const supabase = createSupabaseServerClient();
     const { data: scheduled, error } = await supabase
       .from("class_sessions")
@@ -724,7 +745,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   }
 
   if (cancelCourseKeywords.includes(normalizedText)) {
-    const scheduledResult = await getScheduledSessionChoices();
+    const scheduledResult = await getScheduledSessionChoices(student);
 
     if (!scheduledResult.ok) {
       return {
@@ -773,17 +794,6 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
         replyText: parsed.error,
         errors: [parsed.error],
         quickReplies: [{ label: "返回", text: "返回" }],
-      };
-    }
-
-    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-    if (!student) {
-      return {
-        ok: false,
-        replyText: "找不到學生資料，無法選擇課程。",
-        errors: ["找不到學生資料，無法選擇課程"],
-        quickReplies: [],
       };
     }
 
@@ -842,17 +852,6 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
         replyText: parsed.error,
         errors: [parsed.error],
         quickReplies: [{ label: "返回", text: "返回" }],
-      };
-    }
-
-    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-    if (!student) {
-      return {
-        ok: false,
-        replyText: "找不到學生資料，無法完成課程。",
-        errors: ["找不到學生資料，無法完成課程"],
-        quickReplies: [],
       };
     }
 
@@ -924,17 +923,6 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
       };
     }
 
-    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-    if (!student) {
-      return {
-        ok: false,
-        replyText: "找不到學生資料，無法取消課程。",
-        errors: ["找不到學生資料，無法取消課程"],
-        quickReplies: [],
-      };
-    }
-
     const supabase = createSupabaseServerClient();
     const { data: cancelledSession, error } = await supabase
       .from("class_sessions")
@@ -990,12 +978,6 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   }
 
   if (paymentKeywords.includes(normalizedText)) {
-    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-    if (!student) {
-      return lineMenuError("找不到學生資料，無法讀取繳費狀態。");
-    }
-
     const { data: records, error } = await listLinePaymentRecords(student.id);
 
     if (error) return lineMenuError(error.message);
@@ -1003,7 +985,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
     return {
       ok: true,
       replyText: [
-        "裔甯繳費管理",
+        `${student.name}繳費管理`,
         "",
         "請選擇期數：",
         ...(records ?? []).map(
@@ -1024,9 +1006,6 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
 
   if (selectedPaymentMatch) {
     const installmentNo = Number(selectedPaymentMatch[1]);
-    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-    if (!student) return lineMenuError("找不到學生資料，無法讀取繳費狀態。");
 
     const { data: record, error } = await getLinePaymentRecord(student.id, installmentNo);
 
@@ -1075,10 +1054,6 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
 
     if (!parsedDate.ok) return lineMenuError(parsedDate.error);
 
-    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-    if (!student) return lineMenuError("找不到學生資料，無法登記繳費。");
-
     const { data: currentRecord, error: currentError } = await getLinePaymentRecord(
       student.id,
       installmentNo,
@@ -1124,9 +1099,6 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
 
   if (markUnpaidMatch) {
     const installmentNo = Number(markUnpaidMatch[1]);
-    const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-    if (!student) return lineMenuError("找不到學生資料，無法修改繳費狀態。");
 
     const { data: currentRecord, error: currentError } = await getLinePaymentRecord(
       student.id,
@@ -1170,16 +1142,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string) {
   return null;
 }
 
-async function getScheduledSessionChoices() {
-  const student = await getStudentByShareToken(yiNingPackagePlan.shareToken);
-
-  if (!student) {
-    return {
-      ok: false as const,
-      errors: ["找不到學生資料，無法讀取預約課程"],
-    };
-  }
-
+async function getScheduledSessionChoices(student: Student) {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("class_sessions")
@@ -1223,6 +1186,28 @@ function lineMenuError(message: string) {
     quickReplies: [
       { label: "返回", text: "返回" },
       { label: "結束", text: "結束" },
+    ],
+  };
+}
+
+function buildStudentMainMenu(student: Student) {
+  return {
+    ok: true,
+    replyText: [
+      `${student.name}管理選單`,
+      "",
+      "請輸入其中一項：",
+      "課程",
+      "繳費",
+      "保健食品",
+      "學生端連結",
+    ].join("\n"),
+    errors: [],
+    quickReplies: [
+      { label: "課程", text: "課程" },
+      { label: "繳費", text: "繳費" },
+      { label: "保健食品", text: "保健食品" },
+      { label: "學生端連結", text: "學生端連結" },
     ],
   };
 }
