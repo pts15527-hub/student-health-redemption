@@ -212,6 +212,14 @@ if (
   throw new Error("LINE selected payment response was not returned as expected.");
 }
 
+const clearedPaymentContext = await sendMenuCommand("返回");
+const clearedPaymentContextMessage = clearedPaymentContext.body.replies?.[0]?.reply?.payload?.messages?.[0];
+
+if (!clearedPaymentContext.response.ok || !clearedPaymentContextMessage?.text.includes("管理選單")) {
+  console.error(JSON.stringify(clearedPaymentContext.body, null, 2));
+  throw new Error("LINE payment pending context should be cleared by returning to the menu.");
+}
+
 const fullWidthPaymentDate = await sendMenuCommand("第99期 ７／１０");
 const fullWidthPaymentMessage = fullWidthPaymentDate.body.replies?.[0]?.reply?.payload?.messages?.[0];
 

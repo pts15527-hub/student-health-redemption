@@ -18,10 +18,14 @@ import { parseRedemptionMessage } from "@/lib/line/redemption-parser";
 import { replyLineText } from "@/lib/line/reply";
 import { verifyLineSignatureGuard } from "@/lib/line/signature";
 import {
+  clearPendingLineAction,
   clearActiveLineStudent,
   findStudentByAlias,
   getActiveLineStudent,
+  getLineAdminContext,
   setActiveLineStudent,
+  setPendingPaymentDateInput,
+  type LineAdminContext,
 } from "@/lib/line/student-context";
 import { loadStudentRedemptionPlan } from "@/lib/line/student-redemption-plan";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -109,7 +113,8 @@ async function handleLineWebhookBody(payload: unknown) {
       continue;
     }
 
-    const activeStudent = await getActiveLineStudent(command.adminUserId);
+    const activeContext = await getLineAdminContext(command.adminUserId);
+    const activeStudent = activeContext?.student ?? null;
 
     if (!activeStudent) {
       const replyText = "請先輸入學生名字，例如「裔甯」。";
@@ -121,6 +126,28 @@ async function handleLineWebhookBody(payload: unknown) {
         pending: null,
         errors: [replyText],
       });
+      continue;
+    }
+
+    const pendingContextResult = await handlePendingLineContextInput(
+      command.messageText,
+      command.adminUserId,
+      activeContext,
+    );
+
+    if (pendingContextResult) {
+      const replyResult = await replyLineText(command.replyToken, pendingContextResult.replyText, {
+        quickReplies: pendingContextResult.quickReplies,
+      });
+
+      replies.push({
+        ok: pendingContextResult.ok,
+        replyToken: command.replyToken,
+        reply: replyResult,
+        pending: null,
+        errors: pendingContextResult.ok ? [] : pendingContextResult.errors,
+      });
+
       continue;
     }
 
@@ -339,6 +366,79 @@ async function handleBookingInput(messageText: string, adminUserId: string, stud
     quickReplies: [
       { label: "課程", text: "課程" },
       { label: "返回", text: "返回" },
+    ],
+  };
+}
+
+async function handlePendingLineContextInput(
+  messageText: string,
+  adminUserId: string,
+  context: LineAdminContext | null,
+) {
+  if (!context || context.pendingAction !== "payment_date_input") return null;
+
+  const normalizedText = normalizeBookingInput(messageText);
+  if (isMenuNavigationText(normalizedText)) return null;
+
+  const installmentNo = readPendingInstallmentNo(context.pendingPayload);
+  if (!installmentNo) {
+    await clearPendingLineAction(adminUserId);
+    return lineMenuError("繳費暫存狀態不完整，請重新開啟繳費選單。");
+  }
+
+  const dateTextResult = extractPaymentDateText(normalizedText, installmentNo);
+
+  if (!dateTextResult.ok) {
+    return {
+      ok: false,
+      replyText: dateTextResult.error,
+      errors: [dateTextResult.error],
+      quickReplies: [
+        { label: "繳費", text: "繳費" },
+        { label: "返回", text: "返回" },
+        { label: "結束", text: "結束" },
+      ],
+    };
+  }
+
+  const parsedDate = parseBookingInput(`${dateTextResult.dateText} 00:00`);
+
+  if (!parsedDate.ok) {
+    return {
+      ok: false,
+      replyText: `日期格式看不懂，請重新輸入第 ${installmentNo} 期繳費日，例如：6/20`,
+      errors: [parsedDate.error],
+      quickReplies: [
+        { label: "繳費", text: "繳費" },
+        { label: "返回", text: "返回" },
+        { label: "結束", text: "結束" },
+      ],
+    };
+  }
+
+  const result = await markPaymentInstallmentPaid(context.student, installmentNo, parsedDate.data.sessionDate);
+
+  if (!result.ok) return result;
+
+  const clearError = await clearPendingLineAction(adminUserId);
+  if (clearError) return lineMenuError(clearError.message);
+
+  return {
+    ok: true,
+    replyText: [
+      "繳費已登記",
+      "",
+      `期數：第 ${installmentNo} 期`,
+      `繳費日：${parsedDate.data.displayDate}`,
+      "",
+      "學生端已同步更新。",
+    ].join("\n"),
+    errors: [],
+    quickReplies: [
+      { label: "繳費", text: "繳費" },
+      { label: "課程", text: "課程" },
+      { label: "返回", text: "返回" },
+      { label: "結束", text: "結束" },
     ],
   };
 }
@@ -648,6 +748,8 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
   }
 
   if (menuKeywords.includes(normalizedText)) {
+    const clearError = await clearPendingLineAction(adminUserId);
+    if (clearError) return lineMenuError(clearError.message);
     return buildStudentMainMenu(student);
   }
 
@@ -661,6 +763,9 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
   }
 
   if (supplementKeywords.includes(normalizedText)) {
+    const clearError = await clearPendingLineAction(adminUserId);
+    if (clearError) return lineMenuError(clearError.message);
+
     return {
       ok: true,
       replyText: [
@@ -679,6 +784,9 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
   }
 
   if (courseKeywords.includes(normalizedText)) {
+    const clearError = await clearPendingLineAction(adminUserId);
+    if (clearError) return lineMenuError(clearError.message);
+
     return {
       ok: true,
       replyText: `${student.name}課程管理\n\n請選擇操作：`,
@@ -984,6 +1092,9 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
   }
 
   if (paymentKeywords.includes(normalizedText)) {
+    const clearError = await clearPendingLineAction(adminUserId);
+    if (clearError) return lineMenuError(clearError.message);
+
     const { data: records, error } = await listLinePaymentRecords(student.id);
 
     if (error) return lineMenuError(error.message);
@@ -1019,6 +1130,9 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
     if (!record) return lineMenuError(`找不到第 ${installmentNo} 期繳費資料。`);
 
     if (record.status === "paid") {
+      const clearError = await clearPendingLineAction(adminUserId);
+      if (clearError) return lineMenuError(clearError.message);
+
       return {
         ok: true,
         replyText: [
@@ -1035,6 +1149,9 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
         ],
       };
     }
+
+    const pendingError = await setPendingPaymentDateInput(adminUserId, student.id, installmentNo);
+    if (pendingError) return lineMenuError(pendingError.message);
 
     return {
       ok: true,
@@ -1060,28 +1177,11 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
 
     if (!parsedDate.ok) return lineMenuError(parsedDate.error);
 
-    const { data: currentRecord, error: currentError } = await getLinePaymentRecord(
-      student.id,
-      installmentNo,
-    );
+    const result = await markPaymentInstallmentPaid(student, installmentNo, parsedDate.data.sessionDate);
+    if (!result.ok) return result;
 
-    if (currentError) return lineMenuError(currentError.message);
-    if (!currentRecord) return lineMenuError(`找不到第 ${installmentNo} 期繳費資料。`);
-    if (currentRecord.status === "paid") {
-      return lineMenuError(`第 ${installmentNo} 期已經是已繳，沒有重複登記。`);
-    }
-
-    const { data: record, error } = await markLinePaymentPaid(
-      student.id,
-      installmentNo,
-      parsedDate.data.sessionDate,
-    );
-
-    if (error) return lineMenuError(error.message);
-
-    if (!record) {
-      return lineMenuError(`第 ${installmentNo} 期狀態已變更，請重新開啟繳費選單。`);
-    }
+    const clearError = await clearPendingLineAction(adminUserId);
+    if (clearError) return lineMenuError(clearError.message);
 
     return {
       ok: true,
@@ -1146,6 +1246,125 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
   }
 
   return null;
+}
+
+async function markPaymentInstallmentPaid(student: Student, installmentNo: number, paidDate: string) {
+  const { data: currentRecord, error: currentError } = await getLinePaymentRecord(student.id, installmentNo);
+
+  if (currentError) return lineMenuError(currentError.message);
+  if (!currentRecord) return lineMenuError(`找不到第 ${installmentNo} 期繳費資料。`);
+  if (currentRecord.status === "paid") {
+    return lineMenuError(`第 ${installmentNo} 期已經是已繳，沒有重複登記。`);
+  }
+
+  const { data: record, error } = await markLinePaymentPaid(student.id, installmentNo, paidDate);
+
+  if (error) return lineMenuError(error.message);
+
+  if (!record) {
+    return lineMenuError(`第 ${installmentNo} 期狀態已變更，請重新開啟繳費選單。`);
+  }
+
+  return {
+    ok: true as const,
+    replyText: "",
+    errors: [],
+    quickReplies: [],
+  };
+}
+
+function readPendingInstallmentNo(payload: Record<string, unknown> | null) {
+  const value = payload?.installmentNo;
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : null;
+}
+
+function extractPaymentDateText(normalizedText: string, pendingInstallmentNo: number) {
+  const dateOnlyMatch = normalizedText.match(/^(\d{1,2}\/\d{1,2})$/);
+  if (dateOnlyMatch) {
+    return {
+      ok: true as const,
+      dateText: dateOnlyMatch[1],
+    };
+  }
+
+  const installmentMatch = normalizedText.match(/^第?([0-9一二三四五六七八九十]+)期\s*(\d{1,2}\/\d{1,2})$/);
+  if (installmentMatch) {
+    const installmentNo = parseInstallmentNo(installmentMatch[1]);
+
+    if (installmentNo !== pendingInstallmentNo) {
+      return {
+        ok: false as const,
+        error: `目前正在登記第 ${pendingInstallmentNo} 期，請輸入第 ${pendingInstallmentNo} 期繳費日，例如：6/20`,
+      };
+    }
+
+    return {
+      ok: true as const,
+      dateText: installmentMatch[2],
+    };
+  }
+
+  return {
+    ok: false as const,
+    error: `日期格式看不懂，請重新輸入第 ${pendingInstallmentNo} 期繳費日，例如：6/20`,
+  };
+}
+
+function parseInstallmentNo(raw: string) {
+  if (/^\d+$/.test(raw)) return Number(raw);
+
+  const values: Record<string, number> = {
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+    十: 10,
+  };
+
+  if (raw === "十") return 10;
+  if (raw.startsWith("十")) return 10 + (values[raw.slice(1)] ?? 0);
+  if (raw.endsWith("十")) return (values[raw[0]] ?? 0) * 10;
+  if (raw.includes("十")) {
+    const [tens, ones] = raw.split("十");
+    return (values[tens] ?? 0) * 10 + (values[ones] ?? 0);
+  }
+
+  return values[raw] ?? Number.NaN;
+}
+
+function isMenuNavigationText(normalizedText: string) {
+  return (
+    [
+      "選單",
+      "返回",
+      "學生端連結",
+      "學生連結",
+      "連結",
+      "保健食品",
+      "領取",
+      "新增領取紀錄",
+      "課程",
+      "新增預約",
+      "完成課程",
+      "取消課程",
+      "繳費",
+      "付款",
+      "結束",
+      "確認送出",
+      "確認",
+      "取消",
+    ].includes(normalizedText) ||
+    /^選擇繳費\s+第\d+期$/.test(normalizedText) ||
+    /^改回未繳\s+第\d+期$/.test(normalizedText) ||
+    /^選擇完成課程\s+/.test(normalizedText) ||
+    /^確認完成課程\s+/.test(normalizedText) ||
+    /^確認取消課程\s+/.test(normalizedText)
+  );
 }
 
 async function getScheduledSessionChoices(student: Student) {

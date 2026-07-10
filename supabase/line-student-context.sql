@@ -12,12 +12,18 @@ create index if not exists idx_student_aliases_student
 create table if not exists line_admin_contexts (
   admin_user_id text primary key,
   active_student_id uuid not null references students(id) on delete cascade,
+  pending_action text,
+  pending_payload jsonb,
   selected_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 create index if not exists idx_line_admin_contexts_student
   on line_admin_contexts(active_student_id);
+
+create index if not exists idx_line_admin_contexts_pending_action
+  on line_admin_contexts(pending_action)
+  where pending_action is not null;
 
 alter table student_aliases enable row level security;
 alter table line_admin_contexts enable row level security;

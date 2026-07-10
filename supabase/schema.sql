@@ -22,6 +22,8 @@ create table if not exists student_aliases (
 create table if not exists line_admin_contexts (
   admin_user_id text primary key,
   active_student_id uuid not null references students(id) on delete cascade,
+  pending_action text,
+  pending_payload jsonb,
   selected_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
