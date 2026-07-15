@@ -2,6 +2,7 @@ import Link from "next/link";
 import { StatCard } from "@/components/StatCard";
 import { formatDate, formatTime } from "@/lib/format";
 import { getStudentBundle } from "@/lib/data";
+import { visibleSessionNote } from "@/lib/session-display";
 
 export default async function StudentHomePage({ params }: { params: Promise<{ share_token: string }> }) {
   const { share_token } = await params;
@@ -16,35 +17,47 @@ export default async function StudentHomePage({ params }: { params: Promise<{ sh
     <main className="stack">
       <section className="hero">
         <div>
-          <p className="eyebrow">剩餘保健食品組數</p>
-          <h1>{bundle.student.name}</h1>
-          <strong>
+          <p className="eyebrow">{bundle.student.name}｜剩餘保健食品組數</p>
+          <h1>
             {bundle.stats.remainingCredits}
             {creditUnit}
+          </h1>
+          <strong>
+            已扣 {bundle.stats.usedCredits} / 共 {bundle.stats.totalCredits} {creditUnit}
           </strong>
           {bundle.packagePlan ? (
             <p className="muted">
-              總共 {bundle.stats.totalCredits} {creditUnit}，已扣 {bundle.stats.usedCredits} {creditUnit}
+              {bundle.packagePlan.plan_name}
             </p>
           ) : (
             <p className="muted">目前尚無保健食品方案</p>
           )}
         </div>
-        <Link className="primary-button" href={`/s/${share_token}/payments`}>
-          查看繳費狀態
-        </Link>
+        <div className="hero-actions">
+          <Link className="primary-button" href={`/s/${share_token}/payments`}>
+            查看繳費狀態
+          </Link>
+          <Link className="button secondary" href={`/s/${share_token}/records`}>
+            查看領取紀錄
+          </Link>
+        </div>
       </section>
 
       <section className="grid-2">
         <div className="panel">
-          <p className="eyebrow">下一堂課</p>
+          <div className="section-heading compact">
+            <p className="eyebrow">下一堂課</p>
+            <Link className="text-link" href={`/s/${share_token}/sessions#scheduled`}>
+              查看預約
+            </Link>
+          </div>
           {nextSession ? (
             <>
               <h2>{nextSession.title}</h2>
               <p>
                 {formatDate(nextSession.session_date)} {formatTime(nextSession.session_time)}
               </p>
-              {nextSession.notes && <p className="muted">{nextSession.notes}</p>}
+              {visibleSessionNote(nextSession.notes) && <p className="muted">{visibleSessionNote(nextSession.notes)}</p>}
             </>
           ) : (
             <p className="muted">目前尚無預約課程</p>
@@ -52,7 +65,12 @@ export default async function StudentHomePage({ params }: { params: Promise<{ sh
         </div>
 
         <div className="panel">
-          <p className="eyebrow">最近領取紀錄</p>
+          <div className="section-heading compact">
+            <p className="eyebrow">最近領取紀錄</p>
+            <Link className="text-link" href={`/s/${share_token}/records`}>
+              全部紀錄
+            </Link>
+          </div>
           {latestRecord ? (
             <>
               <h2>{formatDate(latestRecord.record_date)}</h2>
@@ -60,7 +78,6 @@ export default async function StudentHomePage({ params }: { params: Promise<{ sh
                 扣 {latestRecord.credit_used} {creditUnit}｜剩餘 {latestRecord.remaining_after ?? bundle.stats.remainingCredits}{" "}
                 {creditUnit}
               </p>
-              {latestRecord.notes && <p className="muted">{latestRecord.notes}</p>}
             </>
           ) : (
             <p className="muted">尚無領取紀錄</p>

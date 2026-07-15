@@ -426,7 +426,9 @@ join products pr on pr.slug in (
   'joint-steady-ex',
   'clean-circulation-drink',
   'natto-red-yeast-q10',
-  'smart-light-drink'
+  'smart-light-drink',
+  'doubles-cocoa',
+  'doubles-seafood-soup'
 )
 where s.share_token = 'yi-ning' and r.label = '5 盒一組'
 on conflict do nothing;
@@ -463,7 +465,7 @@ select r.id, pr.id
 from redemption_rules r
 join package_plans p on p.id = r.package_plan_id
 join students s on s.id = p.student_id
-join products pr on pr.slug in ('grow-up-drink', 'polysaccharide-drink')
+join products pr on pr.slug in ('grow-up-drink', 'polysaccharide-drink', 'turtle-deer-joint-drink')
 where s.share_token = 'yi-ning' and r.label = '7 盒一組'
 on conflict do nothing;
 
@@ -509,7 +511,7 @@ where share_token = 'yi-ning'
 and not exists (select 1 from class_sessions where student_id = students.id);
 
 insert into redemption_records (student_id, package_plan_id, record_date, source_type, credit_used, notes)
-select s.id, p.id, '2026-07-01', 'bundle', 1, 'D*3 + R*3 優惠套組部分領取，已給 2 罐 D + 2 罐 R。'
+select s.id, p.id, '2026-07-01', 'bundle', 1, '專案優惠｜D*3＋R*3 送美妍賦活飲15盒＋12入賦活飲＋禮盒2盒'
 from students s
 join package_plans p on p.student_id = s.id
 where s.share_token = 'yi-ning'

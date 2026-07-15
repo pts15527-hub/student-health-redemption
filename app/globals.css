@@ -126,8 +126,21 @@ h3 {
 .hero strong {
   display: block;
   margin-top: 8px;
-  font-size: clamp(42px, 12vw, 76px);
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.hero h1 {
+  margin-top: 4px;
+  font-size: clamp(48px, 15vw, 86px);
   line-height: 0.95;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
 }
 
 .section-heading {
@@ -136,6 +149,10 @@ h3 {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+.section-heading.compact {
+  margin-bottom: 8px;
 }
 
 .stat-grid {
@@ -207,6 +224,12 @@ h3 {
 .button.secondary {
   color: #246b5d;
   background: #e7f1eb;
+}
+
+.text-link {
+  color: #246b5d;
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .bottom-nav {
@@ -333,9 +356,167 @@ h3 {
   overflow-wrap: anywhere;
 }
 
+.payment-card.paid {
+  border-color: rgba(36, 107, 93, 0.22);
+  background: #f5fbf7;
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rule-note {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f7f4ee;
+}
+
+.rule-note span {
+  color: #68736e;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.rule-card {
+  display: grid;
+  gap: 10px;
+}
+
+.rule-grid,
+.plan-product-list {
+  display: grid;
+  gap: 12px;
+}
+
+.rule-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.plan-product-card {
+  padding: 10px;
+  border: 1px solid rgba(50, 75, 67, 0.1);
+  border-radius: 10px;
+  background: #fbfaf6;
+}
+
+.plan-product-card summary {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  align-items: center;
+  gap: 10px;
+  list-style-position: inside;
+}
+
+.plan-product-card img {
+  width: 58px;
+  height: 58px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #f0ece3;
+}
+
+.plan-product-card summary strong,
+.plan-product-card summary small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.plan-product-card summary small {
+  margin-top: 4px;
+  color: #68736e;
+  font-size: 13px;
+}
+
+.plan-product-detail {
+  padding-top: 10px;
+}
+
+.plan-product-detail p {
+  margin: 0;
+}
+
 details summary {
   cursor: pointer;
   font-weight: 900;
+}
+
+.record-summary summary {
+  display: grid;
+  gap: 5px;
+  list-style-position: inside;
+}
+
+.record-summary summary strong,
+.record-summary summary span,
+.record-summary summary small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.record-summary summary small {
+  color: #68736e;
+  font-size: 13px;
+}
+
+.record-detail,
+.record-items {
+  display: grid;
+  gap: 8px;
+}
+
+.record-items {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.record-items p {
+  margin: 0;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f7f4ee;
+}
+
+.unrealized-list {
+  display: grid;
+  gap: 12px;
+}
+
+.unrealized-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(50, 75, 67, 0.1);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.unrealized-card summary {
+  display: grid;
+  gap: 5px;
+  list-style-position: inside;
+}
+
+.unrealized-card summary h3,
+.unrealized-card summary p,
+.unrealized-card summary small {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.unrealized-card summary small {
+  color: #68736e;
+  font-size: 13px;
+}
+
+.unrealized-detail {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
 }
 
 .session-list {
@@ -350,6 +531,31 @@ details summary {
   border: 1px solid rgba(50, 75, 67, 0.1);
   border-radius: 10px;
   background: #fff;
+}
+
+.session-item summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  list-style-position: inside;
+}
+
+.session-item summary h3,
+.session-item summary small {
+  display: block;
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.session-item summary small {
+  color: #68736e;
+  font-size: 13px;
+}
+
+.session-detail {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
 }
 
 .session-item.upcoming {

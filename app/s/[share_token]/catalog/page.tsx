@@ -1,4 +1,5 @@
 import { getStudentBundle } from "@/lib/data";
+import { formatProductRuleSummary } from "@/lib/redemption-rule-display";
 
 const categoryOrder = [
   "高端抗老",
@@ -18,6 +19,7 @@ const categoryOrder = [
 export default async function CatalogPage({ params }: { params: Promise<{ share_token: string }> }) {
   const { share_token } = await params;
   const bundle = await getStudentBundle(share_token);
+  const creditUnit = bundle.packagePlan?.credit_unit_label ?? "組";
   const productCategories = Array.from(new Set(bundle.products.map((product) => product.category)));
   const categories = [
     ...categoryOrder.filter((category) => productCategories.includes(category)),
@@ -30,6 +32,7 @@ export default async function CatalogPage({ params }: { params: Promise<{ share_
         <div>
           <p className="eyebrow">保健食品型錄</p>
           <h1>分類瀏覽</h1>
+          <p className="muted">可兌換品項與兌換規則會顯示在商品卡上。</p>
         </div>
       </header>
 
@@ -48,13 +51,19 @@ export default async function CatalogPage({ params }: { params: Promise<{ share_
                 return (
                   <article className="card product-card" key={product.id}>
                     {product.image_src && <img src={product.image_src} alt={product.image_alt ?? product.name} />}
-                    <span className={`badge ${product.is_available ? "" : "unavailable"}`}>
-                      {product.is_available ? "可兌換" : "暫停兌換"}
-                    </span>
+                    <div className="card-meta">
+                      <span className={`badge ${product.is_available ? "" : "unavailable"}`}>
+                        {product.is_available ? "可兌換" : "暫停兌換"}
+                      </span>
+                      <span className="muted">{product.category}</span>
+                    </div>
                     <h3>{product.name}</h3>
-                    <p className="muted">{product.specification}</p>
-                    <p>{product.primary_benefits}</p>
-                    <p className="muted">兌換：{rules.map((rule) => rule.label).join("、") || "待設定"}</p>
+                    <p className="muted">規格：{product.specification || "未設定"}</p>
+                    <p>{product.primary_benefits || "功效說明待補"}</p>
+                    <div className="rule-note">
+                      <span>兌換規則</span>
+                      <strong>{formatProductRuleSummary(rules, creditUnit)}</strong>
+                    </div>
                   </article>
                 );
               })}

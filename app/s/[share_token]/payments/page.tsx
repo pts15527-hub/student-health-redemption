@@ -11,6 +11,12 @@ export default async function PaymentsPage({ params }: { params: Promise<{ share
         <div>
           <p className="eyebrow">{bundle.student.name}｜繳費狀態</p>
           <h1>{bundle.billingPlan ? `${bundle.stats.installmentCount} 期付款紀錄` : "付款紀錄"}</h1>
+          {bundle.billingPlan && (
+            <p className="muted">
+              已繳 {bundle.stats.paidInstallments} 期，未繳{" "}
+              {Math.max(bundle.stats.installmentCount - bundle.stats.paidInstallments, 0)} 期
+            </p>
+          )}
         </div>
       </header>
 
@@ -35,15 +41,17 @@ export default async function PaymentsPage({ params }: { params: Promise<{ share
       {bundle.paymentRecords.length > 0 ? (
         <section className="grid-3">
           {bundle.paymentRecords.map((record) => (
-            <article className="card payment-card" key={record.id}>
-              <p className="eyebrow">第 {record.installment_no} 期</p>
-              <h3>{statusLabel(record.status)}</h3>
+            <article className={`card payment-card ${record.status === "paid" ? "paid" : ""}`} key={record.id}>
+              <div className="card-meta">
+                <p className="eyebrow">第 {record.installment_no} 期</p>
+                <span className={`badge ${record.status === "paid" ? "" : "unavailable"}`}>{statusLabel(record.status)}</span>
+              </div>
               <p>{formatMoney(record.amount)}</p>
-              <p className="muted">
+              <strong>
                 {record.status === "paid"
                   ? `繳費日 ${formatDate(record.paid_date)}`
                   : `應繳日 ${formatDate(record.due_date)}`}
-              </p>
+              </strong>
             </article>
           ))}
         </section>

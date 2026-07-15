@@ -1,6 +1,7 @@
 import { StatCard } from "@/components/StatCard";
 import { formatDate, formatTime, statusLabel } from "@/lib/format";
 import { getStudentBundle } from "@/lib/data";
+import { visibleSessionNote } from "@/lib/session-display";
 
 export default async function SessionsPage({ params }: { params: Promise<{ share_token: string }> }) {
   const { share_token } = await params;
@@ -21,6 +22,9 @@ export default async function SessionsPage({ params }: { params: Promise<{ share
         <div>
           <p className="eyebrow">課程合約與上課紀錄</p>
           <h1>{bundle.courseContract?.plan_name ?? bundle.student.project_name}</h1>
+          <p className="muted">
+            {scheduled.length ? `下一堂：${formatDate(scheduled[0].session_date)} ${formatTime(scheduled[0].session_time)}` : "目前沒有預約課程"}
+          </p>
         </div>
       </header>
 
@@ -30,7 +34,7 @@ export default async function SessionsPage({ params }: { params: Promise<{ share
             <div className="stat-grid">
               <StatCard label="總堂數" value={bundle.stats.totalSessions} />
               <StatCard label="已上課" value={bundle.stats.completedSessions} accent />
-              <StatCard label="已預約" value={bundle.stats.scheduledSessions} />
+              <StatCard label="已預約" value={bundle.stats.scheduledSessions} href="#scheduled" />
               <StatCard label="剩餘堂數" value={bundle.stats.remainingSessions} />
               <StatCard label="可預約" value={bundle.stats.remainingBookableSessions} />
             </div>
@@ -89,20 +93,25 @@ export default async function SessionsPage({ params }: { params: Promise<{ share
         </div>
         <div className="session-list">
           {scheduled.map((session) => (
-            <article className="session-item upcoming" key={session.id}>
-              <div className="session-date">
-                <strong>{formatDate(session.session_date)}</strong>
-                <span>{formatTime(session.session_time)}</span>
-              </div>
-              <div>
-                <span className="badge">{statusLabel(session.status)}</span>
-                <h3>{session.title}</h3>
+            <details className="session-item upcoming" key={session.id}>
+              <summary>
+                <div className="session-date">
+                  <strong>{formatDate(session.session_date)}</strong>
+                  <span>{formatTime(session.session_time)}</span>
+                </div>
+                <div>
+                  <span className="badge">{statusLabel(session.status)}</span>
+                  <h3>{session.title}</h3>
+                  <small>點開看課程資訊</small>
+                </div>
+              </summary>
+              <div className="session-detail">
                 {bundle.courseContract?.location && <p className="muted">{bundle.courseContract.location}</p>}
-                {session.notes && <p>{session.notes}</p>}
+                {visibleSessionNote(session.notes) && <p>{visibleSessionNote(session.notes)}</p>}
               </div>
-            </article>
+            </details>
           ))}
-          {!scheduled.length && <p className="muted">目前沒有預約課程</p>}
+          {!scheduled.length && <p className="muted empty-state">目前沒有預約課程</p>}
         </div>
       </section>
 
@@ -113,20 +122,25 @@ export default async function SessionsPage({ params }: { params: Promise<{ share
         </div>
         <div className="session-list">
           {completed.map((session) => (
-            <article className="session-item" key={session.id}>
-              <div className="session-date">
-                <strong>{formatDate(session.session_date)}</strong>
-                <span>{formatTime(session.session_time)}</span>
-              </div>
-              <div>
-                <span className="badge">{statusLabel(session.status)}</span>
-                <h3>{session.title}</h3>
+            <details className="session-item" key={session.id}>
+              <summary>
+                <div className="session-date">
+                  <strong>{formatDate(session.session_date)}</strong>
+                  <span>{formatTime(session.session_time)}</span>
+                </div>
+                <div>
+                  <span className="badge">{statusLabel(session.status)}</span>
+                  <h3>{session.title}</h3>
+                  <small>點開看上課內容</small>
+                </div>
+              </summary>
+              <div className="session-detail">
                 {session.content && <p>{session.content}</p>}
-                {session.notes && <p className="muted">{session.notes}</p>}
+                {visibleSessionNote(session.notes) && <p className="muted">{visibleSessionNote(session.notes)}</p>}
               </div>
-            </article>
+            </details>
           ))}
-          {!completed.length && <p className="muted">目前沒有完成紀錄</p>}
+          {!completed.length && <p className="muted empty-state">目前沒有完成紀錄</p>}
         </div>
       </section>
 
@@ -137,19 +151,25 @@ export default async function SessionsPage({ params }: { params: Promise<{ share
         </div>
         <div className="session-list">
           {cancelled.map((session) => (
-            <article className="session-item cancelled" key={session.id}>
-              <div className="session-date">
-                <strong>{formatDate(session.session_date)}</strong>
-                <span>{formatTime(session.session_time)}</span>
+            <details className="session-item cancelled" key={session.id}>
+              <summary>
+                <div className="session-date">
+                  <strong>{formatDate(session.session_date)}</strong>
+                  <span>{formatTime(session.session_time)}</span>
+                </div>
+                <div>
+                  <span className="badge">{statusLabel(session.status)}</span>
+                  <h3>{session.title}</h3>
+                  <small>點開看取消資訊</small>
+                </div>
+              </summary>
+              <div className="session-detail">
+                <p className="muted">取消紀錄不扣堂數</p>
+                {visibleSessionNote(session.notes) && <p className="muted">{visibleSessionNote(session.notes)}</p>}
               </div>
-              <div>
-                <span className="badge">{statusLabel(session.status)}</span>
-                <h3>{session.title}</h3>
-                {session.notes && <p className="muted">{session.notes}</p>}
-              </div>
-            </article>
+            </details>
           ))}
-          {!cancelled.length && <p className="muted">目前沒有取消紀錄</p>}
+          {!cancelled.length && <p className="muted empty-state">目前沒有取消紀錄</p>}
         </div>
       </section>
     </main>

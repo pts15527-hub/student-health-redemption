@@ -30,6 +30,8 @@ export const yiNingPackagePlan = {
         "clean-circulation-drink",
         "natto-red-yeast-q10",
         "smart-light-drink",
+        "doubles-cocoa",
+        "doubles-seafood-soup",
       ],
     },
     {
@@ -54,7 +56,7 @@ export const yiNingPackagePlan = {
       creditCost: 1,
       quantityPerRedemption: 7,
       notes: "一般固定兌換規則",
-      productSlugs: ["grow-up-drink", "polysaccharide-drink"],
+      productSlugs: ["grow-up-drink", "polysaccharide-drink", "turtle-deer-joint-drink"],
     },
     {
       label: "3 盒一組",
