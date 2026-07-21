@@ -366,6 +366,7 @@ async function handleBookingInput(messageText: string, adminUserId: string, stud
     quickReplies: [
       { label: "課程", text: "課程" },
       { label: "返回", text: "返回" },
+      { label: "結束", text: "結束" },
     ],
   };
 }
@@ -703,6 +704,9 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
   const confirmedCancellationMatch = normalizedText.match(
     /^確認取消課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})$/,
   );
+  const confirmedTestCancellationMatch = normalizedText.match(
+    /^確認數據測試取消課程\s+(\d{1,2}\/\d{1,2}\s+\d{1,2}:\d{2})$/,
+  );
   const selectedPaymentMatch = normalizedText.match(/^選擇繳費\s+第(\d+)期$/);
   const paymentEntryMatch = normalizedText.match(/^第(\d+)期\s+(\d{1,2}\/\d{1,2})$/);
   const markUnpaidMatch = normalizedText.match(/^改回未繳\s+第(\d+)期$/);
@@ -713,12 +717,14 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
   const newBookingKeywords = ["新增預約"];
   const completeCourseKeywords = ["完成課程"];
   const cancelCourseKeywords = ["取消課程"];
+  const testCancelCourseKeywords = ["數據測試取消"];
   const paymentKeywords = ["繳費", "付款"];
 
   const isMenuCommand =
     Boolean(selectedCompletionMatch) ||
     Boolean(confirmedCompletionMatch) ||
     Boolean(confirmedCancellationMatch) ||
+    Boolean(confirmedTestCancellationMatch) ||
     Boolean(selectedPaymentMatch) ||
     Boolean(paymentEntryMatch) ||
     Boolean(markUnpaidMatch) ||
@@ -730,6 +736,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
     ...newBookingKeywords,
     ...completeCourseKeywords,
     ...cancelCourseKeywords,
+    ...testCancelCourseKeywords,
     ...paymentKeywords,
   ].includes(normalizedText);
 
@@ -795,6 +802,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
         { label: "新增預約", text: "新增預約" },
         { label: "完成課程", text: "完成課程" },
         { label: "取消課程", text: "取消課程" },
+        { label: "數據測試取消", text: "數據測試取消" },
         { label: "返回", text: "返回" },
       ],
     };
@@ -837,6 +845,7 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
         quickReplies: [
           { label: "課程", text: "課程" },
           { label: "返回", text: "返回" },
+          { label: "結束", text: "結束" },
         ],
       };
     }
@@ -895,6 +904,49 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
           };
         }),
         { label: "返回", text: "返回" },
+      ],
+    };
+  }
+
+  if (testCancelCourseKeywords.includes(normalizedText)) {
+    const scheduledResult = await getScheduledSessionChoices(student);
+
+    if (!scheduledResult.ok) {
+      return {
+        ok: false,
+        replyText: scheduledResult.errors.join("\n"),
+        errors: scheduledResult.errors,
+        quickReplies: [],
+      };
+    }
+
+    if (!scheduledResult.sessions.length) {
+      return {
+        ok: true,
+        replyText: "目前沒有可刪除的測試預約課程。",
+        errors: [],
+        quickReplies: [
+          { label: "課程", text: "課程" },
+          { label: "返回", text: "返回" },
+          { label: "結束", text: "結束" },
+        ],
+      };
+    }
+
+    return {
+      ok: true,
+      replyText: "請選擇要刪除的測試課程：\n\n這個操作會直接刪除預約，不會在學生端留下取消紀錄。",
+      errors: [],
+      quickReplies: [
+        ...scheduledResult.sessions.map((session) => {
+          const label = formatSessionChoice(session.session_date, session.session_time);
+          return {
+            label,
+            text: `確認數據測試取消課程 ${label}`,
+          };
+        }),
+        { label: "返回", text: "返回" },
+        { label: "結束", text: "結束" },
       ],
     };
   }
@@ -1081,6 +1133,70 @@ async function buildLineMenuResponse(messageText: string, adminUserId: string, s
         `時間：${parsed.data.displayTime}`,
         "",
         "本次不扣堂數，學生端已同步更新。",
+      ].join("\n"),
+      errors: [],
+      quickReplies: [
+        { label: "課程", text: "課程" },
+        { label: "返回", text: "返回" },
+        { label: "結束", text: "結束" },
+      ],
+    };
+  }
+
+  if (confirmedTestCancellationMatch) {
+    const parsed = parseBookingInput(confirmedTestCancellationMatch[1]);
+
+    if (!parsed.ok) {
+      return {
+        ok: false,
+        replyText: parsed.error,
+        errors: [parsed.error],
+        quickReplies: [{ label: "返回", text: "返回" }],
+      };
+    }
+
+    const supabase = createSupabaseServerClient();
+    const { data: deletedSession, error } = await supabase
+      .from("class_sessions")
+      .delete()
+      .eq("student_id", student.id)
+      .eq("session_date", parsed.data.sessionDate)
+      .eq("session_time", parsed.data.sessionTime)
+      .eq("status", "scheduled")
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      return {
+        ok: false,
+        replyText: error.message,
+        errors: [error.message],
+        quickReplies: [],
+      };
+    }
+
+    if (!deletedSession) {
+      return {
+        ok: false,
+        replyText: "找不到這筆已預約課程，可能已被完成、取消或刪除。",
+        errors: ["找不到這筆已預約課程"],
+        quickReplies: [
+          { label: "課程", text: "課程" },
+          { label: "返回", text: "返回" },
+          { label: "結束", text: "結束" },
+        ],
+      };
+    }
+
+    return {
+      ok: true,
+      replyText: [
+        "測試課程已刪除",
+        "",
+        `日期：${parsed.data.displayDate}`,
+        `時間：${parsed.data.displayTime}`,
+        "",
+        "學生端不會留下取消紀錄。",
       ].join("\n"),
       errors: [],
       quickReplies: [
@@ -1352,6 +1468,7 @@ function isMenuNavigationText(normalizedText: string) {
       "新增預約",
       "完成課程",
       "取消課程",
+      "數據測試取消",
       "繳費",
       "付款",
       "結束",
@@ -1363,7 +1480,8 @@ function isMenuNavigationText(normalizedText: string) {
     /^改回未繳\s+第\d+期$/.test(normalizedText) ||
     /^選擇完成課程\s+/.test(normalizedText) ||
     /^確認完成課程\s+/.test(normalizedText) ||
-    /^確認取消課程\s+/.test(normalizedText)
+    /^確認取消課程\s+/.test(normalizedText) ||
+    /^確認數據測試取消課程\s+/.test(normalizedText)
   );
 }
 

@@ -80,7 +80,7 @@ if (body.replies?.[0]?.pending !== null) {
 const courseMenu = await sendMenuCommand("課程");
 const courseMessage = courseMenu.body.replies?.[0]?.reply?.payload?.messages?.[0];
 const courseLabels = (courseMessage?.quickReply?.items ?? []).map((item) => item.action?.label);
-const expectedCourseLabels = ["新增預約", "完成課程", "取消課程", "返回"];
+const expectedCourseLabels = ["新增預約", "完成課程", "取消課程", "數據測試取消", "返回"];
 
 if (
   !courseMenu.response.ok ||
@@ -147,6 +147,20 @@ if (
 ) {
   console.error(JSON.stringify(cancelCourse.body, null, 2));
   throw new Error("LINE course cancellation choices were not returned as expected.");
+}
+
+const testCancelCourse = await sendMenuCommand("數據測試取消");
+const testCancelCourseMessage = testCancelCourse.body.replies?.[0]?.reply?.payload?.messages?.[0];
+const testCancelCourseLabels = (testCancelCourseMessage?.quickReply?.items ?? []).map((item) => item.action?.label);
+
+if (
+  !testCancelCourse.response.ok ||
+  !testCancelCourseMessage?.text.includes("請選擇要刪除的測試課程") ||
+  !["返回", "結束"].every((label) => testCancelCourseLabels.includes(label)) ||
+  testCancelCourse.body.replies?.[0]?.pending !== null
+) {
+  console.error(JSON.stringify(testCancelCourse.body, null, 2));
+  throw new Error("LINE test course cancellation choices were not returned as expected.");
 }
 
 const exitMenu = await sendMenuCommand("結束");
